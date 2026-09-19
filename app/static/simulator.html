@@ -223,6 +223,7 @@
   }
   .bubble .ticks { color: #00000073; }
   .bubble .ticks.read { color: var(--wa-tick-read); }
+  .bubble a { color: #039be5; text-decoration: underline; word-break: break-all; }
   .bubble.patient {
     align-self: flex-end;
     background: var(--wa-out-bubble);
@@ -490,6 +491,22 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// Escapes the text first (so a patient can't inject markup), then turns
+// any http(s) URL into a real clickable link — this is what lets a Google
+// Maps link the bot sends actually open the app/browser on tap, instead
+// of sitting there as text the person has to copy and paste.
+function linkify(text) {
+  const escaped = escapeHtml(text);
+  return escaped.replace(/(https?:\/\/[^\s<]+)/g, (url) => {
+    // Trim common trailing punctuation that isn't part of the URL (a
+    // period ending the sentence, a closing parenthesis, etc.).
+    const trailingMatch = url.match(/[),.!?]+$/);
+    const trailing = trailingMatch ? trailingMatch[0] : "";
+    const href = trailing ? url.slice(0, -trailing.length) : url;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${href}</a>${trailing}`;
+  });
+}
+
 function formatTime(iso) {
   try {
     return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -542,7 +559,7 @@ function renderWhatsAppMessages(container, messages, { keepTyping } = {}) {
       // just show it as "read" once there's any later message.
       ticks = `<span class="ticks read">✓✓</span>`;
     }
-    bubble.innerHTML = `${escapeHtml(m.body)}<span class="meta">${m.intent ? escapeHtml(m.intent) + " · " : ""}${formatTime(m.created_at)} ${ticks}</span>`;
+    bubble.innerHTML = `${linkify(m.body)}<span class="meta">${m.intent ? escapeHtml(m.intent) + " · " : ""}${formatTime(m.created_at)} ${ticks}</span>`;
     container.appendChild(bubble);
   }
   if (typingEl) container.appendChild(typingEl);
@@ -642,16 +659,39 @@ function renderMessages(container, messages) {
     const bubble = document.createElement("div");
     bubble.className = "bubble " + m.sender;
     const label = m.sender === "patient" ? "Paciente" : m.sender === "bot" ? "Bot" : m.sender === "human_agent" ? "Agente" : "Sistema";
-    bubble.innerHTML = escapeHtml(m.body) + `<span class="meta">${label} · ${formatTime(m.created_at)}${m.intent ? " · " + escapeHtml(m.intent) : ""}</span>`;
+    bubble.innerHTML = linkify(m.body) + `<span class="meta">${label} · ${formatTime(m.created_at)}${m.intent ? " · " + escapeHtml(m.intent) : ""}</span>`;
     container.appendChild(bubble);
   }
   container.scrollTop = container.scrollHeight;
 }
 
+// Display text only — the underlying status/priority values (and the CSS
+// classes below) stay in English because they're the same enum values the
+// backend and the state machine use (app.models.conversation.ConversationStatus,
+// handoff_priority). Only what the agent reads on screen is translated.
+const STATUS_LABELS_ES = {
+  BOT_ACTIVE: "Bot activo",
+  WAITING_FOR_PATIENT: "Esperando paciente",
+  WAITING_FOR_HUMAN: "Esperando agente",
+  HUMAN_ACTIVE: "Agente activo",
+  HUMAN_RESOLVED: "Resuelto",
+  BOT_RESUMED: "Bot reanudado",
+  CLOSED: "Cerrado",
+};
+
+const PRIORITY_LABELS_ES = {
+  CRITICAL: "Crítica",
+  HIGH: "Alta",
+  MEDIUM: "Media",
+  LOW: "Baja",
+};
+
 function conversationStatusBadge(conv) {
-  let html = `<span class="badge ${conv.status}">${conv.status.replace(/_/g, " ")}</span>`;
+  const statusLabel = STATUS_LABELS_ES[conv.status] || conv.status.replace(/_/g, " ");
+  let html = `<span class="badge ${conv.status}">${statusLabel}</span>`;
   if (conv.handoff_priority) {
-    html += `<span class="badge priority-${conv.handoff_priority}">${conv.handoff_priority}</span>`;
+    const priorityLabel = PRIORITY_LABELS_ES[conv.handoff_priority] || conv.handoff_priority;
+    html += `<span class="badge priority-${conv.handoff_priority}">${priorityLabel}</span>`;
   }
   return html;
 }
