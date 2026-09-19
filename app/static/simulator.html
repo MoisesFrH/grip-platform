@@ -14,6 +14,12 @@
     --agent-bubble: #d6e8ff;
     --muted: #6b7280;
     --accent: #128c7e;
+    --wa-header: #075e54;
+    --wa-panel: #f0f2f5;
+    --wa-chat-bg: #e5ddd5;
+    --wa-out-bubble: #dcf8c6;
+    --wa-in-bubble: #ffffff;
+    --wa-tick-read: #34b7f1;
     --danger: #c0392b;
     --warn: #b7791f;
   }
@@ -49,8 +55,12 @@
   }
   .pane-left {
     flex: 1;
+    max-width: 420px;
     border-right: 1px solid var(--border);
-    max-width: 480px;
+    background: var(--wa-panel);
+    align-items: center;
+    padding: 16px 0;
+    overflow-y: auto;
   }
   .pane-right {
     flex: 1.4;
@@ -67,98 +77,233 @@
     letter-spacing: 0.03em;
   }
 
-  /* --- patient pane --- */
-  .patient-setup {
-    padding: 10px 14px;
-    background: var(--panel);
-    border-bottom: 1px solid var(--border);
+  /* --- simulator controls (not part of the WhatsApp look-alike) --- */
+  .sim-controls {
+    width: 300px;
+    max-width: 90%;
     display: flex;
     gap: 8px;
     align-items: center;
+    margin-bottom: 14px;
+    font-size: 0.78rem;
   }
-  .patient-setup input {
-    flex: 1;
+  .sim-controls label {
+    color: var(--muted);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    display: block;
+    margin-bottom: 2px;
+  }
+  .sim-controls input {
+    width: 100%;
     padding: 6px 8px;
     border: 1px solid var(--border);
     border-radius: 6px;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
   }
-  .patient-setup button {
+  .sim-controls button {
     padding: 6px 10px;
     border: 1px solid var(--border);
     background: #fff;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    align-self: flex-end;
   }
+
+  /* --- phone mockup --- */
+  .phone-frame {
+    width: 300px;
+    max-width: 90%;
+    height: 640px;
+    max-height: 78vh;
+    background: #111;
+    border-radius: 34px;
+    padding: 10px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+  }
+  .phone-screen {
+    background: var(--wa-chat-bg);
+    width: 100%;
+    height: 100%;
+    border-radius: 24px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .phone-notch {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90px;
+    height: 16px;
+    background: #111;
+    border-radius: 10px;
+    z-index: 5;
+  }
+  .wa-status-bar {
+    height: 30px;
+    background: var(--wa-header);
+    flex-shrink: 0;
+  }
+  .wa-header {
+    background: var(--wa-header);
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px 12px;
+    flex-shrink: 0;
+  }
+  .wa-header .back-arrow { font-size: 1.1rem; opacity: 0.9; }
+  .wa-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #ffffff33;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+  .wa-header .who { flex: 1; min-width: 0; }
+  .wa-header .name {
+    font-size: 0.92rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .wa-header .status {
+    font-size: 0.68rem;
+    opacity: 0.85;
+  }
+  .wa-header .icons {
+    display: flex;
+    gap: 14px;
+    font-size: 0.95rem;
+    opacity: 0.9;
+  }
+
   .chat-scroll {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: 12px 10px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
   }
   .bubble {
-    max-width: 78%;
-    padding: 8px 12px;
-    border-radius: 10px;
-    font-size: 0.9rem;
-    line-height: 1.35;
+    max-width: 80%;
+    padding: 6px 8px 6px 9px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    line-height: 1.33;
     white-space: pre-wrap;
     word-wrap: break-word;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+    position: relative;
   }
   .bubble .meta {
-    display: block;
-    font-size: 0.68rem;
-    color: var(--muted);
-    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    justify-content: flex-end;
+    font-size: 0.62rem;
+    color: #00000073;
+    margin-top: 2px;
+    white-space: nowrap;
   }
+  .bubble .ticks { color: #00000073; }
+  .bubble .ticks.read { color: var(--wa-tick-read); }
   .bubble.patient {
     align-self: flex-end;
-    background: var(--patient-bubble);
+    background: var(--wa-out-bubble);
+    border-top-right-radius: 0;
   }
-  .bubble.bot {
-    align-self: flex-start;
-    background: var(--bot);
-  }
+  .bubble.bot,
   .bubble.human_agent {
     align-self: flex-start;
-    background: var(--agent-bubble);
+    background: var(--wa-in-bubble);
+    border-top-left-radius: 0;
+  }
+  .bubble.human_agent .meta::before {
+    content: "Equipo GRIP · ";
+    color: var(--accent);
+    font-weight: 600;
   }
   .bubble.system {
     align-self: center;
-    background: transparent;
-    color: var(--muted);
+    background: #d9edf9dd;
+    color: #4a5568;
     font-style: italic;
-    font-size: 0.78rem;
+    font-size: 0.7rem;
+    box-shadow: none;
   }
+  .typing-bubble {
+    align-self: flex-start;
+    background: var(--wa-in-bubble);
+    border-top-left-radius: 0;
+    padding: 9px 12px;
+    border-radius: 8px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+  }
+  .typing-bubble span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #9aa0a6;
+    display: inline-block;
+    animation: wa-typing 1.1s infinite ease-in-out;
+  }
+  .typing-bubble span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-bubble span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes wa-typing {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+    30% { transform: translateY(-3px); opacity: 1; }
+  }
+
   .composer {
     display: flex;
     gap: 8px;
-    padding: 10px 14px;
-    background: var(--panel);
-    border-top: 1px solid var(--border);
+    padding: 8px 10px;
+    background: var(--wa-panel);
+    flex-shrink: 0;
+    align-items: center;
   }
   .composer input {
     flex: 1;
-    padding: 9px 12px;
+    padding: 9px 14px;
     border-radius: 20px;
-    border: 1px solid var(--border);
-    font-size: 0.9rem;
+    border: none;
+    font-size: 0.85rem;
+    background: #fff;
   }
+  .composer input:focus { outline: none; }
   .composer button {
-    background: var(--accent);
+    background: var(--wa-header);
     color: white;
     border: none;
-    border-radius: 20px;
-    padding: 0 18px;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    flex-shrink: 0;
   }
   .composer button:disabled { opacity: 0.5; cursor: default; }
 
-  /* --- inbox pane --- */
+  /* --- inbox pane (agent side — internal tool, not WhatsApp-styled) --- */
   .inbox-list {
     width: 300px;
     border-right: 1px solid var(--border);
@@ -225,6 +370,31 @@
   }
   .inbox-actions button.primary { background: var(--accent); color: white; border-color: var(--accent); }
   .inbox-actions button:disabled { opacity: 0.5; cursor: default; }
+  .inbox-detail .chat-scroll {
+    background: #fafbfc;
+  }
+  .inbox-detail .bubble {
+    box-shadow: none;
+    border-radius: 10px;
+  }
+  .inbox-detail .bubble.patient { background: var(--patient-bubble); }
+  .inbox-detail .bubble.bot { background: var(--bot); }
+  .inbox-detail .bubble.human_agent { background: var(--agent-bubble); }
+  .inbox-detail .bubble .meta::before { content: none; }
+  .inbox-detail .composer {
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+  }
+  .inbox-detail .composer input {
+    border: 1px solid var(--border);
+    border-radius: 20px;
+  }
+  .inbox-detail .composer button {
+    background: var(--accent);
+    border-radius: 20px;
+    width: auto;
+    padding: 0 18px;
+  }
   .empty-state {
     flex: 1;
     display: flex;
@@ -245,21 +415,43 @@
 </header>
 
 <div class="layout">
-  <!-- LEFT: patient side -->
+  <!-- LEFT: patient side, styled as a WhatsApp phone screen -->
   <section class="pane pane-left">
-    <div class="pane-title">Paciente (WhatsApp simulado)</div>
-    <div class="patient-setup">
-      <input id="patient-phone" placeholder="Tu número simulado" />
-      <button id="new-patient-btn" title="Generar un número nuevo">Nuevo paciente</button>
+    <div class="sim-controls">
+      <div style="flex:1">
+        <label>Número simulado (paciente)</label>
+        <input id="patient-phone" placeholder="Tu número simulado" />
+      </div>
+      <button id="new-patient-btn" title="Simular un paciente distinto">Nuevo paciente</button>
     </div>
-    <div class="chat-scroll" id="patient-chat"></div>
-    <div class="composer">
-      <input id="patient-input" placeholder="Escribe un mensaje..." />
-      <button id="patient-send-btn">Enviar</button>
+
+    <div class="phone-frame">
+      <div class="phone-screen">
+        <div class="phone-notch"></div>
+        <div class="wa-status-bar"></div>
+        <div class="wa-header">
+          <span class="back-arrow">‹</span>
+          <div class="wa-avatar">G</div>
+          <div class="who">
+            <div class="name">GRIP</div>
+            <div class="status" id="wa-status">en línea</div>
+          </div>
+          <div class="icons">
+            <span>📹</span>
+            <span>📞</span>
+            <span>⋮</span>
+          </div>
+        </div>
+        <div class="chat-scroll" id="patient-chat"></div>
+        <div class="composer">
+          <input id="patient-input" placeholder="Mensaje" />
+          <button id="patient-send-btn" title="Enviar">➤</button>
+        </div>
+      </div>
     </div>
   </section>
 
-  <!-- RIGHT: agent inbox -->
+  <!-- RIGHT: agent inbox (internal tool — not meant to look like WhatsApp) -->
   <section class="pane pane-right">
     <div class="inbox-list" id="inbox-list">
       <div class="pane-title">Bandeja del agente</div>
@@ -272,6 +464,10 @@
 
 <script>
 const TENANT_SLUG = "grip";
+// A believable minimum "thinking" delay for the bot side, so a reply that
+// the backend actually returns in ~50ms doesn't feel instant/robotic. Real
+// Twilio + Gemini round-trips land around this range anyway.
+const MIN_BOT_DELAY_MS = 900;
 
 // ---------- utilities ----------
 function randomPhone() {
@@ -302,6 +498,10 @@ function formatTime(iso) {
   }
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function api(path, options) {
   const res = await fetch(path, options);
   if (!res.ok) {
@@ -316,33 +516,52 @@ async function api(path, options) {
   return res.json();
 }
 
-// ================= PATIENT SIDE =================
+// ================= PATIENT SIDE (WhatsApp look-alike) =================
 
 const patientPhoneInput = document.getElementById("patient-phone");
 const patientChatEl = document.getElementById("patient-chat");
 const patientInputEl = document.getElementById("patient-input");
 const patientSendBtn = document.getElementById("patient-send-btn");
 const newPatientBtn = document.getElementById("new-patient-btn");
+const waStatusEl = document.getElementById("wa-status");
 
 let currentPatientPhone = getOrInitPatientPhone();
 patientPhoneInput.value = currentPatientPhone;
 
-function renderMessages(container, messages) {
+function renderWhatsAppMessages(container, messages, { keepTyping } = {}) {
+  const typingEl = keepTyping ? container.querySelector(".typing-row") : null;
   container.innerHTML = "";
   for (const m of messages) {
     const bubble = document.createElement("div");
     bubble.className = "bubble " + m.sender;
-    const label = m.sender === "patient" ? "Paciente" : m.sender === "bot" ? "Bot" : m.sender === "human_agent" ? "Agente" : "Sistema";
-    bubble.innerHTML = escapeHtml(m.body) + `<span class="meta">${label} · ${formatTime(m.created_at)}${m.intent ? " · " + escapeHtml(m.intent) : ""}</span>`;
+    const isOutgoing = m.sender === "patient";
+    let ticks = "";
+    if (isOutgoing) {
+      // Every patient message shown here was already answered by the bot
+      // (or is currently awaiting a reply) — good enough for a demo to
+      // just show it as "read" once there's any later message.
+      ticks = `<span class="ticks read">✓✓</span>`;
+    }
+    bubble.innerHTML = `${escapeHtml(m.body)}<span class="meta">${m.intent ? escapeHtml(m.intent) + " · " : ""}${formatTime(m.created_at)} ${ticks}</span>`;
     container.appendChild(bubble);
   }
+  if (typingEl) container.appendChild(typingEl);
   container.scrollTop = container.scrollHeight;
+}
+
+function showTypingIndicator(container) {
+  const row = document.createElement("div");
+  row.className = "typing-row";
+  row.innerHTML = `<div class="typing-bubble"><span></span><span></span><span></span></div>`;
+  container.appendChild(row);
+  container.scrollTop = container.scrollHeight;
+  return row;
 }
 
 async function refreshPatientChat() {
   try {
     const messages = await api(`/simulator/conversations/by-phone/${TENANT_SLUG}/${encodeURIComponent(currentPatientPhone)}/messages`);
-    renderMessages(patientChatEl, messages);
+    renderWhatsAppMessages(patientChatEl, messages);
   } catch (e) {
     // Contact may not exist yet — that's fine, just show nothing.
   }
@@ -352,16 +571,35 @@ async function sendPatientMessage() {
   const body = patientInputEl.value.trim();
   if (!body) return;
   patientSendBtn.disabled = true;
+  patientInputEl.value = "";
+
+  // Optimistic bubble so the send feels instant, then a typing indicator
+  // while the real request (safety/intent/Gemini) is in flight.
+  const optimistic = document.createElement("div");
+  optimistic.className = "bubble patient";
+  optimistic.innerHTML = `${escapeHtml(body)}<span class="meta">${formatTime(new Date().toISOString())} <span class="ticks">✓✓</span></span>`;
+  patientChatEl.appendChild(optimistic);
+  patientChatEl.scrollTop = patientChatEl.scrollHeight;
+
+  waStatusEl.textContent = "escribiendo...";
+  const typingRow = showTypingIndicator(patientChatEl);
+
   try {
-    await api("/simulator/message", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tenant_slug: TENANT_SLUG, phone: currentPatientPhone, body }),
-    });
-    patientInputEl.value = "";
+    const [result] = await Promise.all([
+      api("/simulator/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenant_slug: TENANT_SLUG, phone: currentPatientPhone, body }),
+      }),
+      sleep(MIN_BOT_DELAY_MS),
+    ]);
+    typingRow.remove();
+    waStatusEl.textContent = result.awaiting_human ? "esperando al equipo" : "en línea";
     await refreshPatientChat();
     await refreshInboxList();
   } catch (e) {
+    typingRow.remove();
+    waStatusEl.textContent = "en línea";
     alert("Error enviando mensaje: " + e.message);
   } finally {
     patientSendBtn.disabled = false;
@@ -376,6 +614,7 @@ patientInputEl.addEventListener("keydown", (e) => {
 patientPhoneInput.addEventListener("change", () => {
   currentPatientPhone = patientPhoneInput.value.trim() || getOrInitPatientPhone();
   localStorage.setItem("simulator_patient_phone", currentPatientPhone);
+  waStatusEl.textContent = "en línea";
   refreshPatientChat();
 });
 
@@ -383,10 +622,11 @@ newPatientBtn.addEventListener("click", () => {
   currentPatientPhone = randomPhone();
   localStorage.setItem("simulator_patient_phone", currentPatientPhone);
   patientPhoneInput.value = currentPatientPhone;
+  waStatusEl.textContent = "en línea";
   patientChatEl.innerHTML = "";
 });
 
-// ================= AGENT INBOX SIDE =================
+// ================= AGENT INBOX SIDE (internal tool) =================
 
 const inboxListEl = document.getElementById("inbox-list");
 const inboxDetailEl = document.getElementById("inbox-detail-content");
@@ -395,6 +635,18 @@ let lastConversations = [];
 
 // A fixed "logged in agent" name for this simulator — good enough for a demo.
 const AGENT_NAME = "secretaria_1";
+
+function renderMessages(container, messages) {
+  container.innerHTML = "";
+  for (const m of messages) {
+    const bubble = document.createElement("div");
+    bubble.className = "bubble " + m.sender;
+    const label = m.sender === "patient" ? "Paciente" : m.sender === "bot" ? "Bot" : m.sender === "human_agent" ? "Agente" : "Sistema";
+    bubble.innerHTML = escapeHtml(m.body) + `<span class="meta">${label} · ${formatTime(m.created_at)}${m.intent ? " · " + escapeHtml(m.intent) : ""}</span>`;
+    container.appendChild(bubble);
+  }
+  container.scrollTop = container.scrollHeight;
+}
 
 function conversationStatusBadge(conv) {
   let html = `<span class="badge ${conv.status}">${conv.status.replace(/_/g, " ")}</span>`;
