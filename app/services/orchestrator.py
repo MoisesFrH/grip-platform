@@ -122,6 +122,12 @@ def process_inbound_message(
 
     for msg in conversation.messages[-1:]:
         msg.intent = classification.primary_intent.value
+        if classification.safety_category is not None:
+            # Not surfaced to the patient or the agent inbox — this is
+            # purely so the dashboard (app.services.analytics) can break
+            # down safety handoffs by category without re-deriving them
+            # from free-text handoff_reason strings.
+            msg.extra_metadata = {"safety_category": classification.safety_category.value}
 
     if classification.category == IntentCategory.C:
         if classification.safety_category is not None:

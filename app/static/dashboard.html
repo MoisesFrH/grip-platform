@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GRIP — Dashboard</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --border: #e2e5e9;
+    --muted: #6b7280;
+    --text: #1f2430;
+    --accent: #128c7e;
+    --danger: #c0392b;
+    --warn: #b7791f;
+    --info: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    background: var(--accent);
+    color: white;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  header h1 { font-size: 1.05rem; margin: 0; font-weight: 600; }
+  header .sub { font-size: 0.78rem; opacity: 0.9; margin-top: 2px; }
+  .period-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+  }
+  .period-select select {
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: none;
+    font-size: 0.82rem;
+  }
+
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .stat-card .label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .stat-card .value {
+    font-size: 1.6rem;
+    font-weight: 700;
+  }
+  .stat-card .value.danger { color: var(--danger); }
+  .stat-card .footnote {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 18px;
+  }
+  .panel h2 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+
+  /* daily volume bar chart, no external library */
+  .bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 140px;
+    padding-top: 10px;
+  }
+  .bar-chart .bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+    min-width: 6px;
+  }
+  .bar-chart .bar {
+    width: 100%;
+    background: var(--accent);
+    border-radius: 3px 3px 0 0;
+    min-height: 2px;
+  }
+  .bar-chart .bar-count {
+    font-size: 0.62rem;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  .bar-chart .bar-label {
+    font-size: 0.6rem;
+    color: var(--muted);
+    margin-top: 4px;
+    white-space: nowrap;
+    transform: rotate(0deg);
+  }
+
+  .hbar-row {
+    display: grid;
+    grid-template-columns: 140px 1fr 46px;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.82rem;
+    margin-bottom: 8px;
+  }
+  .hbar-row .name { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hbar-track { background: #eef0f3; border-radius: 5px; height: 14px; overflow: hidden; }
+  .hbar-fill { height: 100%; background: var(--accent); border-radius: 5px; }
+  .hbar-row .count { text-align: right; color: var(--muted); font-size: 0.78rem; }
+
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .status-chip {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .status-chip .n { font-size: 1.1rem; font-weight: 700; }
+  .status-chip .s { font-size: 0.72rem; color: var(--muted); }
+
+  .safety-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 640px) {
+    .safety-grid { grid-template-columns: 1fr; }
+  }
+
+  .empty-note {
+    color: var(--muted);
+    font-size: 0.85rem;
+    padding: 10px 0;
+  }
+
+  .loading {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>GRIP — Dashboard</h1>
+    <div class="sub">Métricas de conversaciones del asistente de WhatsApp</div>
+  </div>
+  <div class="period-select">
+    <span>Periodo:</span>
+    <select id="period-select">
+      <option value="7">Últimos 7 días</option>
+      <option value="30" selected>Últimos 30 días</option>
+      <option value="90">Últimos 90 días</option>
+    </select>
+  </div>
+</header>
+
+<main id="main-content">
+  <div class="loading">Cargando métricas…</div>
+</main>
+
+<script>
+const TENANT_SLUG = "grip";
+
+const INTENT_LABELS_ES = {
+  GENERAL_INFO: "Información general",
+  LOCATION: "Ubicación",
+  SERVICES: "Servicios",
+  THERAPISTS: "Terapeutas",
+  THERAPIST_AVAILABILITY: "Disponibilidad de terapeutas",
+  BOOKING_GUIDANCE: "Cómo agendar",
+  FIRST_APPOINTMENT: "Primera cita",
+  EVALUATIONS: "Evaluaciones",
+  PAYMENT_INFO: "Información de pago",
+  PAYMENT_ISSUE: "Problema de pago",
+  APPOINTMENT_CHANGE: "Cambio de cita",
+  APPOINTMENT_CANCEL: "Cancelar cita",
+  APPOINTMENT_PROBLEM: "Problema con una cita",
+  CLINICAL_QUESTION: "Pregunta clínica",
+  SAFETY_RISK: "Riesgo / seguridad",
+  HUMAN_REQUEST: "Pidió hablar con humano",
+  OTHER_UNCLEAR: "No identificado",
+};
+
+const STATUS_LABELS_ES = {
+  BOT_ACTIVE: "Bot activo",
+  WAITING_FOR_PATIENT: "Esperando paciente",
+  WAITING_FOR_HUMAN: "Esperando agente",
+  HUMAN_ACTIVE: "Agente activo",
+  HUMAN_RESOLVED: "Resuelto",
+  BOT_RESUMED: "Bot reanudado",
+  CLOSED: "Cerrado",
+};
+
+const PRIORITY_LABELS_ES = {
+  CRITICAL: "Crítica",
+  HIGH: "Alta",
+  MEDIUM: "Media",
+  LOW: "Baja",
+};
+
+const SAFETY_CATEGORY_LABELS_ES = {
+  SUICIDE_OR_SELF_HARM: "Suicidio / autolesión",
+  IMMEDIATE_RISK: "Riesgo inmediato",
+  ABUSE: "Abuso",
+  SYMPTOMS: "Síntomas",
+  DIAGNOSIS_REQUEST: "Pidió diagnóstico",
+  TREATMENT_REQUEST: "Pidió tratamiento",
+  MEDICATION: "Medicación",
+  CLINICAL_OTHER: "Otro tema clínico",
+};
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text == null ? "" : String(text);
+  return div.innerHTML;
+}
+
+async function fetchSummary(days) {
+  const res = await fetch(`/dashboard/api/summary?tenant_slug=${TENANT_SLUG}&days=${days}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+function renderBarChart(byDay) {
+  if (byDay.length === 0) {
+    return `<div class="empty-note">Sin conversaciones nuevas en este periodo.</div>`;
+  }
+  const max = Math.max(...byDay.map((d) => d.count), 1);
+  const cols = byDay
+    .map((d) => {
+      const heightPct = Math.max((d.count / max) * 100, d.count > 0 ? 6 : 0);
+      const label = new Date(d.date + "T00:00:00").toLocaleDateString([], { day: "2-digit", month: "2-digit" });
+      return `
+        <div class="bar-col" title="${label}: ${d.count}">
+          <div class="bar-count">${d.count > 0 ? d.count : ""}</div>
+          <div class="bar" style="height:${heightPct}%"></div>
+          <div class="bar-label">${label}</div>
+        </div>`;
+    })
+    .join("");
+  return `<div class="bar-chart">${cols}</div>`;
+}
+
+function renderHBars(rows, labelMap, total) {
+  if (rows.length === 0) {
+    return `<div class="empty-note">Sin datos en este periodo.</div>`;
+  }
+  const max = Math.max(...rows.map((r) => r.count), 1);
+  return rows
+    .map((r) => {
+      const label = labelMap[r.key] || r.key;
+      const pct = Math.max((r.count / max) * 100, 4);
+      return `
+        <div class="hbar-row">
+          <div class="name">${escapeHtml(label)}</div>
+          <div class="hbar-track"><div class="hbar-fill" style="width:${pct}%"></div></div>
+          <div class="count">${r.count}</div>
+        </div>`;
+    })
+    .join("");
+}
+
+function renderStatusGrid(byStatus) {
+  const entries = Object.entries(byStatus);
+  if (entries.length === 0) return `<div class="empty-note">Sin conversaciones todavía.</div>`;
+  return `<div class="status-grid">${entries
+    .map(
+      ([status, count]) => `
+      <div class="status-chip">
+        <div class="n">${count}</div>
+        <div class="s">${STATUS_LABELS_ES[status] || status}</div>
+      </div>`
+    )
+    .join("")}</div>`;
+}
+
+function render(data) {
+  const main = document.getElementById("main-content");
+
+  const conv = data.conversations;
+  const handoff = data.handoff;
+  const intents = data.top_intents;
+  const safety = data.safety;
+
+  const intentRows = intents.map((i) => ({ key: i.intent, count: i.count }));
+  const handoffPriorityRows = Object.entries(handoff.by_priority).map(([k, v]) => ({ key: k, count: v }));
+  const safetyPriorityRows = Object.entries(safety.by_priority)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => ({ key: k, count: v }));
+  const safetyCategoryRows = Object.entries(safety.by_category).map(([k, v]) => ({ key: k, count: v }));
+
+  main.innerHTML = `
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="label">Conversaciones nuevas</div>
+        <div class="value">${conv.total_new}</div>
+        <div class="footnote">últimos ${data.period_days} días</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Tasa de handoff a humano</div>
+        <div class="value">${Math.round(handoff.rate * 100)}%</div>
+        <div class="footnote">${handoff.handed_off} de ${handoff.total_conversations} conversaciones</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Alertas de seguridad/clínicas</div>
+        <div class="value ${safety.total_alerts > 0 ? "danger" : ""}">${safety.total_alerts}</div>
+        <div class="footnote">SAFETY_RISK + CLINICAL_QUESTION</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Conversaciones nuevas por día</h2>
+      ${renderBarChart(conv.new_per_day)}
+    </div>
+
+    <div class="panel">
+      <h2>Conversaciones por estado (todas, no solo este periodo)</h2>
+      ${renderStatusGrid(conv.by_status)}
+    </div>
+
+    <div class="panel">
+      <h2>De qué preguntan más los pacientes</h2>
+      ${renderHBars(intentRows, INTENT_LABELS_ES)}
+    </div>
+
+    <div class="panel">
+      <h2>Handoffs por prioridad</h2>
+      ${renderHBars(handoffPriorityRows, PRIORITY_LABELS_ES)}
+    </div>
+
+    <div class="panel">
+      <h2>Detalle de alertas de seguridad</h2>
+      <div class="safety-grid">
+        <div>
+          <div class="footnote" style="margin-bottom:8px">Por tipo</div>
+          ${renderHBars(safetyPriorityRows, { SAFETY_RISK: "Riesgo (crítico)", CLINICAL_QUESTION: "Pregunta clínica" })}
+        </div>
+        <div>
+          <div class="footnote" style="margin-bottom:8px">Por categoría</div>
+          ${renderHBars(safetyCategoryRows, SAFETY_CATEGORY_LABELS_ES)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadAndRender() {
+  const days = document.getElementById("period-select").value;
+  const main = document.getElementById("main-content");
+  main.innerHTML = `<div class="loading">Cargando métricas…</div>`;
+  try {
+    const data = await fetchSummary(days);
+    render(data);
+  } catch (e) {
+    main.innerHTML = `<div class="empty-note">No se pudieron cargar las métricas: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+document.getElementById("period-select").addEventListener("change", loadAndRender);
+loadAndRender();
+</script>
+
+</body>
+</html>
