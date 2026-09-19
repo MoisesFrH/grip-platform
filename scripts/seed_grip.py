@@ -19,9 +19,10 @@ GRIP_CONFIG = {
     },
     "location": {
         "configured": True,
-        "address": "Av. Naciones Unidas y Amazonas, Edificio Cuty, piso 4, Quito",
-        "how_to_get_there": "A 5 minutos a pie de la estación de metro La Carolina.",
-        "parking": "Parqueadero del edificio, con validación por 2 horas.",
+        "address": "Paseo de los Notarios 25, Santo Domingo, República Dominicana",
+        "phone": "+1 809-482-0072",
+        "hours": "Lunes a viernes, de 8:00 a.m. a 8:00 p.m.",
+        "maps_link": "https://maps.google.com/?q=Paseo+de+los+Notarios+25,+Santo+Domingo,+Rep%C3%BAblica+Dominicana",
     },
     "services": [
         {"name": "Terapia individual adultos", "description": "Sesiones de 50 minutos, presencial u online."},
