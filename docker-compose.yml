@@ -1,0 +1,33 @@
+# Levanta solo Postgres localmente — la app (FastAPI) sigue corriendo con
+# tu propio .venv, fuera de Docker, para que sea fácil seguir iterando con
+# recarga automática (--reload) sin reconstruir una imagen cada vez.
+#
+# Uso:
+#   docker compose up -d        # levanta Postgres en segundo plano
+#   docker compose down         # lo apaga (los datos persisten en el volumen)
+#   docker compose down -v      # lo apaga y BORRA los datos (empezar de cero)
+#
+# Credenciales/puerto coinciden exactamente con .env.example, así que no
+# hay que tocar DATABASE_URL para nada.
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: grip-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: grip
+      POSTGRES_PASSWORD: grip
+      POSTGRES_DB: grip_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - grip_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grip -d grip_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  grip_postgres_data:

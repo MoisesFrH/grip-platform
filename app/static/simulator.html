@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GRIP — Simulador (sin Twilio)</title>
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --panel: #ffffff;
+    --border: #e2e5e9;
+    --bot: #e9edf1;
+    --patient-bubble: #dcf8c6;
+    --agent-bubble: #d6e8ff;
+    --muted: #6b7280;
+    --accent: #128c7e;
+    --danger: #c0392b;
+    --warn: #b7791f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: #1f2430;
+  }
+  header {
+    background: var(--accent);
+    color: white;
+    padding: 10px 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header .sub {
+    font-weight: 400;
+    font-size: 0.8rem;
+    opacity: 0.9;
+  }
+  .layout {
+    display: flex;
+    height: calc(100vh - 46px);
+  }
+  .pane {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  .pane-left {
+    flex: 1;
+    border-right: 1px solid var(--border);
+    max-width: 480px;
+  }
+  .pane-right {
+    flex: 1.4;
+    display: flex;
+  }
+  .pane-title {
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  /* --- patient pane --- */
+  .patient-setup {
+    padding: 10px 14px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .patient-setup input {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+  }
+  .patient-setup button {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+  }
+  .chat-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .bubble {
+    max-width: 78%;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .bubble .meta {
+    display: block;
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .bubble.patient {
+    align-self: flex-end;
+    background: var(--patient-bubble);
+  }
+  .bubble.bot {
+    align-self: flex-start;
+    background: var(--bot);
+  }
+  .bubble.human_agent {
+    align-self: flex-start;
+    background: var(--agent-bubble);
+  }
+  .bubble.system {
+    align-self: center;
+    background: transparent;
+    color: var(--muted);
+    font-style: italic;
+    font-size: 0.78rem;
+  }
+  .composer {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+  }
+  .composer input {
+    flex: 1;
+    padding: 9px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  .composer button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 0 18px;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  .composer button:disabled { opacity: 0.5; cursor: default; }
+
+  /* --- inbox pane --- */
+  .inbox-list {
+    width: 300px;
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+    overflow-y: auto;
+  }
+  .inbox-item {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .inbox-item:hover { background: #f7f8fa; }
+  .inbox-item.selected { background: #eef6f4; }
+  .inbox-item .phone { font-weight: 600; font-size: 0.85rem; }
+  .inbox-item .preview {
+    font-size: 0.78rem;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .badge.WAITING_FOR_HUMAN { background: #fdecea; color: var(--danger); }
+  .badge.HUMAN_ACTIVE { background: #e6f4ea; color: #1e7e34; }
+  .badge.priority-CRITICAL { background: var(--danger); color: white; }
+  .badge.priority-HIGH { background: var(--warn); color: white; }
+  .badge.priority-MEDIUM { background: #d0d7de; color: #333; }
+  .badge.priority-LOW { background: #eee; color: #666; }
+
+  .inbox-detail {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .inbox-detail-header {
+    padding: 10px 14px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .inbox-detail-header .title {
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .inbox-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .inbox-actions button {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.78rem;
+  }
+  .inbox-actions button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .inbox-actions button:disabled { opacity: 0.5; cursor: default; }
+  .empty-state {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+    padding: 20px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>GRIP — Simulador de conversación</div>
+  <div class="sub">sin Twilio, sin costo — patient chat + agent inbox</div>
+</header>
+
+<div class="layout">
+  <!-- LEFT: patient side -->
+  <section class="pane pane-left">
+    <div class="pane-title">Paciente (WhatsApp simulado)</div>
+    <div class="patient-setup">
+      <input id="patient-phone" placeholder="Tu número simulado" />
+      <button id="new-patient-btn" title="Generar un número nuevo">Nuevo paciente</button>
+    </div>
+    <div class="chat-scroll" id="patient-chat"></div>
+    <div class="composer">
+      <input id="patient-input" placeholder="Escribe un mensaje..." />
+      <button id="patient-send-btn">Enviar</button>
+    </div>
+  </section>
+
+  <!-- RIGHT: agent inbox -->
+  <section class="pane pane-right">
+    <div class="inbox-list" id="inbox-list">
+      <div class="pane-title">Bandeja del agente</div>
+    </div>
+    <div class="inbox-detail">
+      <div id="inbox-detail-content" class="empty-state">Selecciona una conversación de la izquierda.</div>
+    </div>
+  </section>
+</div>
+
+<script>
+const TENANT_SLUG = "grip";
+
+// ---------- utilities ----------
+function randomPhone() {
+  const n = Math.floor(1000000 + Math.random() * 8999999);
+  return "+1555" + n;
+}
+
+function getOrInitPatientPhone() {
+  let phone = localStorage.getItem("simulator_patient_phone");
+  if (!phone) {
+    phone = randomPhone();
+    localStorage.setItem("simulator_patient_phone", phone);
+  }
+  return phone;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text == null ? "" : text;
+  return div.innerHTML;
+}
+
+function formatTime(iso) {
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    return "";
+  }
+}
+
+async function api(path, options) {
+  const res = await fetch(path, options);
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+    } catch (e) {}
+    throw new Error(detail);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+// ================= PATIENT SIDE =================
+
+const patientPhoneInput = document.getElementById("patient-phone");
+const patientChatEl = document.getElementById("patient-chat");
+const patientInputEl = document.getElementById("patient-input");
+const patientSendBtn = document.getElementById("patient-send-btn");
+const newPatientBtn = document.getElementById("new-patient-btn");
+
+let currentPatientPhone = getOrInitPatientPhone();
+patientPhoneInput.value = currentPatientPhone;
+
+function renderMessages(container, messages) {
+  container.innerHTML = "";
+  for (const m of messages) {
+    const bubble = document.createElement("div");
+    bubble.className = "bubble " + m.sender;
+    const label = m.sender === "patient" ? "Paciente" : m.sender === "bot" ? "Bot" : m.sender === "human_agent" ? "Agente" : "Sistema";
+    bubble.innerHTML = escapeHtml(m.body) + `<span class="meta">${label} · ${formatTime(m.created_at)}${m.intent ? " · " + escapeHtml(m.intent) : ""}</span>`;
+    container.appendChild(bubble);
+  }
+  container.scrollTop = container.scrollHeight;
+}
+
+async function refreshPatientChat() {
+  try {
+    const messages = await api(`/simulator/conversations/by-phone/${TENANT_SLUG}/${encodeURIComponent(currentPatientPhone)}/messages`);
+    renderMessages(patientChatEl, messages);
+  } catch (e) {
+    // Contact may not exist yet — that's fine, just show nothing.
+  }
+}
+
+async function sendPatientMessage() {
+  const body = patientInputEl.value.trim();
+  if (!body) return;
+  patientSendBtn.disabled = true;
+  try {
+    await api("/simulator/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenant_slug: TENANT_SLUG, phone: currentPatientPhone, body }),
+    });
+    patientInputEl.value = "";
+    await refreshPatientChat();
+    await refreshInboxList();
+  } catch (e) {
+    alert("Error enviando mensaje: " + e.message);
+  } finally {
+    patientSendBtn.disabled = false;
+  }
+}
+
+patientSendBtn.addEventListener("click", sendPatientMessage);
+patientInputEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendPatientMessage();
+});
+
+patientPhoneInput.addEventListener("change", () => {
+  currentPatientPhone = patientPhoneInput.value.trim() || getOrInitPatientPhone();
+  localStorage.setItem("simulator_patient_phone", currentPatientPhone);
+  refreshPatientChat();
+});
+
+newPatientBtn.addEventListener("click", () => {
+  currentPatientPhone = randomPhone();
+  localStorage.setItem("simulator_patient_phone", currentPatientPhone);
+  patientPhoneInput.value = currentPatientPhone;
+  patientChatEl.innerHTML = "";
+});
+
+// ================= AGENT INBOX SIDE =================
+
+const inboxListEl = document.getElementById("inbox-list");
+const inboxDetailEl = document.getElementById("inbox-detail-content");
+let selectedConversationId = null;
+let lastConversations = [];
+
+// A fixed "logged in agent" name for this simulator — good enough for a demo.
+const AGENT_NAME = "secretaria_1";
+
+function conversationStatusBadge(conv) {
+  let html = `<span class="badge ${conv.status}">${conv.status.replace(/_/g, " ")}</span>`;
+  if (conv.handoff_priority) {
+    html += `<span class="badge priority-${conv.handoff_priority}">${conv.handoff_priority}</span>`;
+  }
+  return html;
+}
+
+function renderInboxList(conversations) {
+  inboxListEl.innerHTML = '<div class="pane-title">Bandeja del agente</div>';
+  if (conversations.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "No hay conversaciones en espera ni activas.";
+    inboxListEl.appendChild(empty);
+    return;
+  }
+  for (const conv of conversations) {
+    const item = document.createElement("div");
+    item.className = "inbox-item" + (conv.id === selectedConversationId ? " selected" : "");
+    item.innerHTML = `
+      <div class="phone">${escapeHtml(conv.contact_name || conv.contact_phone)} ${conversationStatusBadge(conv)}</div>
+      <div class="preview">${escapeHtml(conv.last_message_preview || "")}</div>
+    `;
+    item.addEventListener("click", () => selectConversation(conv.id));
+    inboxListEl.appendChild(item);
+  }
+}
+
+async function refreshInboxList() {
+  try {
+    lastConversations = await api(`/simulator/conversations?tenant_slug=${TENANT_SLUG}`);
+    renderInboxList(lastConversations);
+    if (selectedConversationId) {
+      await refreshInboxDetail();
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function selectConversation(conversationId) {
+  selectedConversationId = conversationId;
+  renderInboxList(lastConversations);
+  await refreshInboxDetail();
+}
+
+async function refreshInboxDetail() {
+  if (!selectedConversationId) return;
+  const conv = lastConversations.find((c) => c.id === selectedConversationId);
+  if (!conv) {
+    inboxDetailEl.className = "empty-state";
+    inboxDetailEl.textContent = "Esta conversación ya no está en la bandeja (fue resuelta o vuelta al bot).";
+    return;
+  }
+
+  let messages = [];
+  try {
+    messages = await api(`/simulator/conversations/${conv.id}/messages`);
+  } catch (e) {}
+
+  const canClaim = conv.status === "WAITING_FOR_HUMAN";
+  const canReply = conv.status === "HUMAN_ACTIVE";
+  const canResolve = conv.status === "HUMAN_ACTIVE";
+  const canReturnToBot = conv.status === "HUMAN_RESOLVED";
+
+  inboxDetailEl.className = "";
+  inboxDetailEl.innerHTML = `
+    <div class="inbox-detail-header">
+      <div class="title">${escapeHtml(conv.contact_name || conv.contact_phone)} ${conversationStatusBadge(conv)}</div>
+      <div class="inbox-actions">
+        <button id="btn-claim" ${canClaim ? "" : "disabled"}>Tomar conversación</button>
+        <button id="btn-resolve" ${canResolve ? "" : "disabled"}>Marcar resuelto</button>
+        <button id="btn-return" ${canReturnToBot ? "" : "disabled"}>Devolver al bot</button>
+      </div>
+    </div>
+    <div class="chat-scroll" id="inbox-chat"></div>
+    <div class="composer">
+      <input id="agent-input" placeholder="${canReply ? 'Responder al paciente...' : 'Toma la conversación para poder responder'}" ${canReply ? "" : "disabled"} />
+      <button id="agent-send-btn" ${canReply ? "" : "disabled"}>Enviar</button>
+    </div>
+  `;
+
+  renderMessages(document.getElementById("inbox-chat"), messages);
+
+  document.getElementById("btn-claim").addEventListener("click", async () => {
+    try {
+      await api(`/simulator/conversations/${conv.id}/claim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent_name: AGENT_NAME }),
+      });
+      await refreshInboxList();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  });
+
+  document.getElementById("btn-resolve").addEventListener("click", async () => {
+    try {
+      await api(`/simulator/conversations/${conv.id}/resolve`, { method: "POST" });
+      await refreshInboxList();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  });
+
+  document.getElementById("btn-return").addEventListener("click", async () => {
+    try {
+      await api(`/simulator/conversations/${conv.id}/return-to-bot`, { method: "POST" });
+      selectedConversationId = null;
+      await refreshInboxList();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  });
+
+  const agentInput = document.getElementById("agent-input");
+  const agentSendBtn = document.getElementById("agent-send-btn");
+
+  async function sendAgentReply() {
+    const body = agentInput.value.trim();
+    if (!body) return;
+    agentSendBtn.disabled = true;
+    try {
+      await api(`/simulator/conversations/${conv.id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      agentInput.value = "";
+      await refreshInboxDetail();
+      await refreshPatientChat();
+    } catch (e) {
+      alert("Error: " + e.message);
+    } finally {
+      agentSendBtn.disabled = false;
+    }
+  }
+
+  if (canReply) {
+    agentSendBtn.addEventListener("click", sendAgentReply);
+    agentInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendAgentReply();
+    });
+  }
+}
+
+// ================= polling =================
+
+refreshPatientChat();
+refreshInboxList();
+setInterval(refreshPatientChat, 3000);
+setInterval(refreshInboxList, 3000);
+</script>
+
+</body>
+</html>
