@@ -282,7 +282,17 @@
 
         <div class="detail-header">
           <div>
-            <p class="name" id="detail-name">—</p>
+            <p class="name" id="detail-name">
+              <span id="detail-name-text">—</span>
+              <button type="button" class="btn-text" id="edit-name-btn" title="Editar nombre">
+                <span class="material-symbols-outlined" style="font-size:15px;">edit</span>
+              </button>
+            </p>
+            <form id="edit-name-form" class="hidden inline-form" style="margin-top:4px;">
+              <input type="text" id="edit-name-input" placeholder="Nombre del paciente" style="flex:1 1 200px; padding:6px 10px; border-radius:8px; border:1px solid var(--outline-variant); font-size:0.85rem;" />
+              <button type="submit" class="btn btn-primary" style="padding:6px 12px;">Guardar</button>
+              <button type="button" class="btn" id="cancel-edit-name-btn" style="padding:6px 12px;">Cancelar</button>
+            </form>
             <span class="phone" id="detail-phone">—</span>
           </div>
           <span class="status-chip" id="detail-status">—</span>
@@ -294,7 +304,7 @@
           </div>
           <table class="data-table" id="appointments-table">
             <thead>
-              <tr><th>Fecha y hora</th><th>Terapeuta</th><th>Estado</th><th>Recordatorio</th></tr>
+              <tr><th>Fecha y hora</th><th>Terapeuta</th><th>Estado</th><th>Recordatorio</th><th></th></tr>
             </thead>
             <tbody id="appointments-tbody"></tbody>
           </table>
@@ -497,9 +507,11 @@
   }
 
   function renderPatientDetail(detail) {
-    $("detail-name").textContent = detail.name || "(sin nombre)";
+    state.currentPatientName = detail.name || "";
+    $("detail-name-text").textContent = detail.name || "(sin nombre)";
     $("detail-phone").textContent = detail.phone;
     $("detail-status").textContent = CONTACT_STATUS_LABELS[detail.status] || detail.status;
+    $("edit-name-form").classList.add("hidden");
 
     // appointments
     const tbody = $("appointments-tbody");
@@ -515,6 +527,7 @@
         <td>${escapeHtml(a.therapist_name)}</td>
         <td></td>
         <td>${reminder}</td>
+        <td></td>
       `;
       const statusCell = tr.children[2];
       const select = document.createElement("select");
@@ -528,6 +541,16 @@
       });
       select.addEventListener("change", () => updateAppointmentStatus(a.id, select.value));
       statusCell.appendChild(select);
+
+      const voiceCell = tr.children[4];
+      const voiceBtn = document.createElement("button");
+      voiceBtn.type = "button";
+      voiceBtn.className = "btn-text";
+      voiceBtn.title = "Prototipo: escuchar cómo sonaría este recordatorio como nota de voz";
+      voiceBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">volume_up</span>';
+      voiceBtn.addEventListener("click", () => playVoiceReminderPreview(a.id, voiceBtn));
+      voiceCell.appendChild(voiceBtn);
+
       tbody.appendChild(tr);
     });
 
@@ -567,6 +590,61 @@
       showToast(e.message || "No se pudo actualizar la cita.", true);
     }
   }
+
+  // Prototype only — see app/services/voice_reminders.py. Fetches audio
+  // (not JSON) directly, since that's what the endpoint returns.
+  async function playVoiceReminderPreview(appointmentId, button) {
+    if (!state.selectedPatientId) return;
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">hourglass_top</span>';
+    try {
+      const res = await fetch(`/crm/patients/${state.selectedPatientId}/appointments/${appointmentId}/voice-reminder-preview`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        let detail = `Error ${res.status}`;
+        try { detail = (await res.json()).detail || detail; } catch (e) {}
+        throw new Error(detail);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.addEventListener("ended", () => URL.revokeObjectURL(url));
+      await audio.play();
+    } catch (err) {
+      showToast(err.message || "No se pudo generar el audio (esto es un prototipo, puede fallar).", true);
+    } finally {
+      button.disabled = false;
+      button.innerHTML = original;
+    }
+  }
+
+  $("edit-name-btn").addEventListener("click", () => {
+    $("edit-name-input").value = state.currentPatientName || "";
+    $("edit-name-form").classList.remove("hidden");
+    $("edit-name-input").focus();
+  });
+
+  $("cancel-edit-name-btn").addEventListener("click", () => {
+    $("edit-name-form").classList.add("hidden");
+  });
+
+  $("edit-name-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.selectedPatientId) return;
+    try {
+      await api(`/crm/patients/${state.selectedPatientId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: $("edit-name-input").value.trim() }),
+      });
+      showToast("Nombre actualizado.");
+      selectPatient(state.selectedPatientId);
+      loadPatients();
+    } catch (err) {
+      showToast(err.message || "No se pudo actualizar el nombre.", true);
+    }
+  });
 
   $("appointment-form").addEventListener("submit", async (e) => {
     e.preventDefault();
