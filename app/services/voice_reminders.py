@@ -54,6 +54,20 @@ _TTS_MODEL = "gemini-2.5-flash-preview-tts"
 # see Gemini's docs for the full prebuilt-voice list.
 DEFAULT_VOICE_NAME = "Kore"
 
+# Gemini's native TTS models are "controllable": a natural-language style
+# instruction placed before the actual content steers HOW it's read
+# (accent, tone, pace) without being read aloud itself. Without this, the
+# model defaults to a generic/Mexican-leaning Spanish accent, which isn't
+# what GRIP's Dominican patients are used to hearing. This is a prompt,
+# not a guarantee — worth listening to a few samples after any wording
+# change to confirm it's still landing as intended.
+_ACCENT_STYLE_INSTRUCTION = (
+    "Lee el siguiente mensaje en voz alta con acento dominicano natural, "
+    "cálido y cotidiano, como lo hablaría alguien de Santo Domingo, "
+    "República Dominicana. Evita un acento mexicano o neutro. "
+    "El mensaje es: "
+)
+
 
 class VoiceSynthesisError(Exception):
     """Raised when Gemini's response doesn't contain the audio we asked
@@ -134,5 +148,6 @@ def synthesize_reminder_voice(text: str, *, client: "genai.Client | None" = None
     """The full prototype pipeline for one reminder message: fixed text
     (from appointments.build_reminder_message) -> speech -> the exact
     audio format WhatsApp needs to show it as a voice note."""
-    pcm = synthesize_speech(text, client=client)
+    styled_text = _ACCENT_STYLE_INSTRUCTION + text
+    pcm = synthesize_speech(styled_text, client=client)
     return pcm_to_whatsapp_ogg(pcm)

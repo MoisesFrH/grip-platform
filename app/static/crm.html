@@ -519,7 +519,7 @@
     $("appointments-empty").classList.toggle("hidden", detail.appointments.length > 0);
     detail.appointments.forEach((a) => {
       const tr = document.createElement("tr");
-      const when = new Date(a.scheduled_at).toLocaleString("es-DO", { dateStyle: "medium", timeStyle: "short" });
+      const when = formatInClinicTime(a.scheduled_at);
       const reminder = a.reminder_response ? (REMINDER_LABELS[a.reminder_response] || a.reminder_response)
         : (a.reminder_sent_at ? "Enviado, sin respuesta" : "—");
       tr.innerHTML = `
@@ -655,7 +655,7 @@
     try {
       await api(`/crm/patients/${state.selectedPatientId}/appointments`, {
         method: "POST",
-        body: JSON.stringify({ therapist_name: therapist, scheduled_at: new Date(when).toISOString() }),
+        body: JSON.stringify({ therapist_name: therapist, scheduled_at: clinicLocalDatetimeToUtcIso(when) }),
       });
       $("apt-therapist").value = "";
       $("apt-datetime").value = "";
@@ -688,6 +688,36 @@
     return String(str).replace(/[&<>"']/g, (c) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
     }[c]));
+  }
+
+  // The clinic (and its patients) are in the Dominican Republic, but the
+  // staff member using this screen could be anywhere (Dome herself is in
+  // the UK) — so a <input type="datetime-local"> value must NOT be parsed
+  // with `new Date(...)`, which assumes it's in the BROWSER's own
+  // timezone. That was the bug: a 2:00pm cita typed in London (UTC+1) was
+  // stored as 1:00pm UTC and then shown to the patient as "1:00pm" with no
+  // further conversion. Instead, treat the typed value as already being
+  // Dominican Republic local time (UTC-4, no daylight saving, so this
+  // offset never changes) and convert it to UTC ourselves.
+  const CLINIC_UTC_OFFSET_HOURS = 4; // America/Santo_Domingo is always UTC-4
+
+  function clinicLocalDatetimeToUtcIso(datetimeLocalValue) {
+    const [datePart, timePart] = datetimeLocalValue.split("T");
+    const [year, month, day] = datePart.split("-").map(Number);
+    const [hour, minute] = timePart.split(":").map(Number);
+    const utcMs = Date.UTC(year, month - 1, day, hour + CLINIC_UTC_OFFSET_HOURS, minute);
+    return new Date(utcMs).toISOString();
+  }
+
+  function formatInClinicTime(isoString) {
+    // timeZone is set explicitly so this always shows the clinic's local
+    // time (what the patient sees in their reminder), regardless of which
+    // timezone the staff member's own browser is in.
+    return new Date(isoString).toLocaleString("es-DO", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "America/Santo_Domingo",
+    });
   }
 
   checkSession();

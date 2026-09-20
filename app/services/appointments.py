@@ -15,6 +15,7 @@ because they share the same table:
 """
 
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
@@ -190,10 +191,21 @@ def apply_reminder_reply(appointment: Appointment, response: ReminderResponse) -
         appointment.status = AppointmentStatus.RESCHEDULE_REQUESTED
 
 
+# Appointment times are shown to the patient in the clinic's own local
+# time, not whatever timezone the staff member happened to be in when they
+# scheduled it (GRIP's staff can be anywhere — Dome herself is in the UK).
+# scheduled_at is stored timezone-aware (in UTC) in the database, so this
+# conversion is what actually fixes "the reminder said 1pm but the cita is
+# at 2pm": without it, _format_when was printing the raw UTC clock time.
+# Santo Domingo has no daylight saving time, so this offset never changes.
+CLINIC_TIMEZONE = ZoneInfo("America/Santo_Domingo")
+
+
 def _format_when(scheduled_at: datetime) -> str:
     # Spanish, no year (it's always "tomorrow" in the real reminder job):
     # "a las 3:00 p. m."
-    return scheduled_at.strftime("a las %I:%M %p").lower().replace("am", "a. m.").replace("pm", "p. m.")
+    local_time = scheduled_at.astimezone(CLINIC_TIMEZONE)
+    return local_time.strftime("a las %I:%M %p").lower().replace("am", "a. m.").replace("pm", "p. m.")
 
 
 def build_reminder_message(appointment: Appointment, contact: Contact) -> str:
