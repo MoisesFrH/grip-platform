@@ -22,13 +22,16 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 
 from app.api.routes.crm import (
+    BootstrapStaffRequest,
     LoginRequest,
+    bootstrap_staff,
     create_note_route,
     get_current_staff,
     login,
     logout,
     require_doctor,
 )
+from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.models.staff import Staff, StaffRole, StaffSession
 from app.models.tenant import Tenant
@@ -265,3 +268,128 @@ def test_create_note_route_is_unreachable_without_require_doctor():
     sig = inspect.signature(create_note_route)
     staff_param = sig.parameters["staff"]
     assert staff_param.default.dependency is require_doctor
+
+
+# --- POST /crm/bootstrap-staff ----------------------------------------------
+#
+# This endpoint exists so a client without a local Python/dependency setup
+# (e.g. on Windows, deploying only through Railway) can create their first
+# staff accounts through a web form instead of scripts/create_staff.py. It
+# must fail closed: disabled unless STAFF_BOOTSTRAP_SECRET is set, and a
+# wrong secret gets the same 404 as "disabled" rather than a 401/403 that
+# would confirm the endpoint exists.
+
+
+def _set_bootstrap_secret(value: str) -> str:
+    """Returns the previous value so the test can restore it — settings are
+    a process-wide lru_cache singleton, so tests must clean up after
+    themselves or they'll bleed into whichever test runs next."""
+    settings = get_settings()
+    previous = settings.staff_bootstrap_secret
+    settings.staff_bootstrap_secret = value
+    return previous
+
+
+def test_bootstrap_staff_disabled_by_default_returns_404():
+    previous = _set_bootstrap_secret("")
+    db = SessionLocal()
+    try:
+        try:
+            bootstrap_staff(
+                BootstrapStaffRequest(secret="anything", username="x", display_name="X", role="doctor", password="clave-correcta-123"),
+                db,
+            )
+            assert False, "expected HTTPException"
+        except HTTPException as exc:
+            assert exc.status_code == 404
+    finally:
+        _set_bootstrap_secret(previous)
+        db.close()
+
+
+def test_bootstrap_staff_rejects_wrong_secret_with_same_404():
+    previous = _set_bootstrap_secret("correct-secret-value")
+    db = SessionLocal()
+    try:
+        try:
+            bootstrap_staff(
+                BootstrapStaffRequest(secret="wrong-secret", username="x", display_name="X", role="doctor", password="clave-correcta-123"),
+                db,
+            )
+            assert False, "expected HTTPException"
+        except HTTPException as exc:
+            assert exc.status_code == 404
+    finally:
+        _set_bootstrap_secret(previous)
+        db.close()
+
+
+def test_bootstrap_staff_creates_and_then_updates_account():
+    tenant = _grip()
+    previous = _set_bootstrap_secret("correct-secret-value")
+    db = SessionLocal()
+    username = f"bootstrap_{uuid.uuid4().hex[:10]}"
+    try:
+        created = bootstrap_staff(
+            BootstrapStaffRequest(
+                secret="correct-secret-value", username=username, display_name="Nueva Persona", role="secretary", password="clave-correcta-123"
+            ),
+            db,
+        )
+        assert created.role == "SECRETARY"
+
+        staff_row = db.query(Staff).filter(Staff.tenant_id == tenant.id, Staff.username == username).one()
+        assert auth.verify_password("clave-correcta-123", staff_row.password_hash)
+
+        # Re-running with a new role/password/display name updates the same
+        # row in place (safe to re-run), same as scripts/create_staff.py.
+        updated = bootstrap_staff(
+            BootstrapStaffRequest(
+                secret="correct-secret-value", username=username, display_name="Nombre Actualizado", role="doctor", password="otra-clave-valida"
+            ),
+            db,
+        )
+        assert updated.role == "DOCTOR"
+        db.refresh(staff_row)
+        assert staff_row.display_name == "Nombre Actualizado"
+        assert staff_row.role == StaffRole.DOCTOR
+        assert auth.verify_password("otra-clave-valida", staff_row.password_hash)
+        assert not auth.verify_password("clave-correcta-123", staff_row.password_hash)
+    finally:
+        _set_bootstrap_secret(previous)
+        _cleanup(db, db.query(Staff).filter(Staff.tenant_id == tenant.id, Staff.username == username).one())
+        db.close()
+
+
+def test_bootstrap_staff_rejects_short_password():
+    previous = _set_bootstrap_secret("correct-secret-value")
+    db = SessionLocal()
+    try:
+        try:
+            bootstrap_staff(
+                BootstrapStaffRequest(secret="correct-secret-value", username="x", display_name="X", role="doctor", password="corta"),
+                db,
+            )
+            assert False, "expected HTTPException"
+        except HTTPException as exc:
+            assert exc.status_code == 400
+    finally:
+        _set_bootstrap_secret(previous)
+        db.close()
+
+
+def test_bootstrap_staff_rejects_invalid_role():
+    previous = _set_bootstrap_secret("correct-secret-value")
+    db = SessionLocal()
+    try:
+        try:
+            bootstrap_staff(
+                BootstrapStaffRequest(secret="correct-secret-value", username="x", display_name="X", role="admin", password="clave-correcta-123"),
+                db,
+            )
+            assert False, "expected HTTPException"
+        except HTTPException as exc:
+            assert exc.status_code == 400
+    finally:
+        _set_bootstrap_secret(previous)
+        db.close()

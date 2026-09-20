@@ -17,6 +17,7 @@ app = FastAPI(title="GRIP / ATR Conversational Platform", version="0.1.0")
 _SIMULATOR_UI_PATH = Path(__file__).parent / "static" / "simulator.html"
 _DASHBOARD_UI_PATH = Path(__file__).parent / "static" / "dashboard.html"
 _CRM_UI_PATH = Path(__file__).parent / "static" / "crm.html"
+_BOOTSTRAP_STAFF_UI_PATH = Path(__file__).parent / "static" / "bootstrap_staff.html"
 
 if get_settings().app_env != "production":
     app.include_router(dev_chat_router)
@@ -48,6 +49,15 @@ def dashboard_ui() -> FileResponse:
 @app.get("/crm")
 def crm_ui() -> FileResponse:
     return FileResponse(_CRM_UI_PATH)
+
+
+# The form itself is harmless to serve (it's just HTML — no data, no
+# secret) even when STAFF_BOOTSTRAP_SECRET is unset; the actual creation
+# only works once that variable is set, since POST /crm/bootstrap-staff
+# checks it (see _check_bootstrap_secret in app/api/routes/crm.py).
+@app.get("/crm/bootstrap")
+def crm_bootstrap_ui() -> FileResponse:
+    return FileResponse(_BOOTSTRAP_STAFF_UI_PATH)
 
 
 @app.get("/health")

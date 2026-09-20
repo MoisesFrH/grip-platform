@@ -14,6 +14,7 @@ Accounts are created by scripts/create_staff.py, not a signup screen —
 see that script's docstring for why.
 """
 
+import hmac
 import uuid
 from datetime import datetime
 
@@ -66,6 +67,17 @@ def _get_tenant(db: Session, staff: Staff) -> Tenant:
     return db.query(Tenant).filter(Tenant.id == staff.tenant_id).one()
 
 
+def _check_bootstrap_secret(provided: str) -> None:
+    """Guards POST /crm/bootstrap-staff — see Settings.staff_bootstrap_secret.
+    404 (not 401/403) both when the feature is off and when the secret is
+    wrong, so the endpoint doesn't even reveal it exists to someone probing
+    without the secret. hmac.compare_digest avoids leaking the secret's
+    length/prefix through response-timing differences."""
+    configured = get_settings().staff_bootstrap_secret
+    if not configured or not hmac.compare_digest(provided, configured):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
 def _get_contact_or_404(db: Session, staff: Staff, contact_id: str) -> Contact:
     """Every patient lookup is scoped to the logged-in staff member's own
     tenant — a GRIP secretary can never fetch another tenant's patient by
@@ -107,6 +119,15 @@ class LoginRequest(BaseModel):
 class StaffOut(BaseModel):
     display_name: str
     role: str
+
+
+class BootstrapStaffRequest(BaseModel):
+    secret: str
+    tenant_slug: str = "grip"
+    username: str
+    display_name: str
+    role: str
+    password: str
 
 
 class PatientSummaryOut(BaseModel):
@@ -212,6 +233,44 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)) 
 
 @router.get("/me", response_model=StaffOut)
 def me(staff: Staff = Depends(get_current_staff)) -> StaffOut:
+    return StaffOut(display_name=staff.display_name, role=staff.role.value)
+
+
+# --- one-time staff bootstrap (no login required — see _check_bootstrap_secret) ---
+
+
+@router.post("/bootstrap-staff", response_model=StaffOut)
+def bootstrap_staff(payload: BootstrapStaffRequest, db: Session = Depends(get_db)) -> StaffOut:
+    _check_bootstrap_secret(payload.secret)
+
+    tenant = db.query(Tenant).filter(Tenant.slug == payload.tenant_slug).one_or_none()
+    if tenant is None:
+        raise HTTPException(status_code=400, detail=f"No existe un tenant con slug '{payload.tenant_slug}'.")
+
+    try:
+        role = StaffRole(payload.role.upper())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="El rol debe ser 'secretary' o 'doctor'.")
+
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres.")
+
+    staff = (
+        db.query(Staff)
+        .filter(Staff.tenant_id == tenant.id, Staff.username == payload.username)
+        .one_or_none()
+    )
+    if staff is None:
+        staff = Staff(tenant_id=tenant.id, username=payload.username, display_name=payload.display_name, role=role)
+        db.add(staff)
+    else:
+        # Same "safe to re-run" behavior as scripts/create_staff.py: updates
+        # and reactivates an existing account rather than failing.
+        staff.display_name = payload.display_name
+        staff.role = role
+        staff.is_active = True
+    staff.password_hash = auth.hash_password(payload.password)
+    db.commit()
     return StaffOut(display_name=staff.display_name, role=staff.role.value)
 
 

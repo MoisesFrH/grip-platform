@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
 
+    # Lets scripts/create_staff.py's job be done through a one-time web form
+    # (POST /crm/bootstrap-staff) instead of a local Python setup — useful
+    # on Railway, where the client doesn't necessarily have Python + this
+    # project's dependencies installed on their own machine. Empty/unset
+    # means the endpoint is disabled outright (see require_bootstrap_secret
+    # in app/api/routes/crm.py) — fail closed, not "anyone can create staff
+    # accounts by default". Set a long random value in Railway's variables
+    # only while creating accounts, then clear it again.
+    staff_bootstrap_secret: str = ""
+
     @field_validator("database_url")
     @classmethod
     def _use_psycopg_driver(cls, value: str) -> str:
