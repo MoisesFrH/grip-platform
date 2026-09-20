@@ -32,6 +32,7 @@ in /crm once this is deployed to Railway (which does have outbound
 network access).
 """
 
+import re
 import subprocess
 
 from google import genai
@@ -65,8 +66,23 @@ _ACCENT_STYLE_INSTRUCTION = (
     "Lee el siguiente mensaje en voz alta con acento dominicano natural, "
     "cálido y cotidiano, como lo hablaría alguien de Santo Domingo, "
     "República Dominicana. Evita un acento mexicano o neutro. "
+    "La palabra \"Grip\" es el nombre del centro y se pronuncia como una "
+    "sola palabra en español (rima con \"chip\"), nunca deletreada letra "
+    "por letra y nunca en inglés. "
     "El mensaje es: "
 )
+
+# Gemini's TTS tends to treat an all-caps word as an acronym and spell it
+# out letter by letter ("G-R-I-P") instead of reading it as a word — which
+# is wrong here, since GRIP is the center's name, not an acronym. Mixed
+# case reads as an ordinary word instead. This ONLY changes what's sent to
+# the TTS model — the actual WhatsApp text message (build_reminder_message)
+# keeps "GRIP" exactly as written; this rewrite never touches that.
+_ALL_CAPS_GRIP_PATTERN = re.compile(r"\bGRIP\b")
+
+
+def _text_for_speech(text: str) -> str:
+    return _ALL_CAPS_GRIP_PATTERN.sub("Grip", text)
 
 
 class VoiceSynthesisError(Exception):
@@ -148,6 +164,6 @@ def synthesize_reminder_voice(text: str, *, client: "genai.Client | None" = None
     """The full prototype pipeline for one reminder message: fixed text
     (from appointments.build_reminder_message) -> speech -> the exact
     audio format WhatsApp needs to show it as a voice note."""
-    styled_text = _ACCENT_STYLE_INSTRUCTION + text
+    styled_text = _ACCENT_STYLE_INSTRUCTION + _text_for_speech(text)
     pcm = synthesize_speech(styled_text, client=client)
     return pcm_to_whatsapp_ogg(pcm)

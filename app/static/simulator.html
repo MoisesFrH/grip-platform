@@ -225,6 +225,17 @@
   .bubble .ticks { color: #00000073; }
   .bubble .ticks.read { color: var(--wa-tick-read); }
   .bubble a { color: #039be5; text-decoration: underline; word-break: break-all; }
+  .voice-note-btn {
+    display: block;
+    margin-top: 4px;
+    padding: 3px 8px;
+    border: none;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.08);
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
+  .voice-note-btn:disabled { opacity: 0.6; cursor: default; }
   .bubble.patient {
     align-self: flex-end;
     background: var(--wa-out-bubble);
@@ -471,6 +482,10 @@
       </div>
       <button id="new-patient-btn" title="Simular un paciente distinto">Nuevo paciente</button>
       <button id="test-reminder-btn" title="Crea una cita de prueba mañana y envía el recordatorio ahora mismo">Probar recordatorio</button>
+      <label style="display:flex; align-items:center; gap:4px; font-size:0.78rem; white-space:nowrap;" title="Prototipo: además del texto, adjunta una nota de voz generada con Gemini">
+        <input type="checkbox" id="test-reminder-voice-checkbox" />
+        🔊 con voz
+      </label>
     </div>
 
     <div class="phone-frame">
@@ -683,18 +698,27 @@ patientPhoneInput.addEventListener("change", () => {
 });
 
 const testReminderBtn = document.getElementById("test-reminder-btn");
+const testReminderVoiceCheckbox = document.getElementById("test-reminder-voice-checkbox");
 testReminderBtn.addEventListener("click", async () => {
   testReminderBtn.disabled = true;
   try {
+    const includeVoice = testReminderVoiceCheckbox.checked;
     const result = await api("/simulator/appointments/test-reminder", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tenant_slug: TENANT_SLUG, phone: currentPatientPhone }),
+      body: JSON.stringify({ tenant_slug: TENANT_SLUG, phone: currentPatientPhone, include_voice: includeVoice }),
     });
     await refreshPatientChat();
     await refreshInboxList();
     const when = new Date(result.scheduled_at).toLocaleString("es-DO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-    alert(`Recordatorio de prueba enviado a ${currentPatientPhone}.\nCita de prueba creada para: ${when}.\n\nAhora responde en el chat de la izquierda (por ejemplo "necesito cancelar" o "sí, ahí estaré") para ver cómo reacciona el sistema.`);
+    let message = `Recordatorio de prueba enviado a ${currentPatientPhone}.\nCita de prueba creada para: ${when}.`;
+    if (includeVoice) {
+      message += result.voice_message_id
+        ? "\n\nTambién se adjuntó la nota de voz (prototipo) — reprodúcela desde la burbuja en el chat."
+        : `\n\nNo se pudo generar la nota de voz: ${result.voice_error || "error desconocido"}.`;
+    }
+    message += '\n\nAhora responde en el chat de la izquierda (por ejemplo "necesito cancelar" o "sí, ahí estaré") para ver cómo reacciona el sistema.';
+    alert(message);
   } catch (e) {
     alert("Error creando el recordatorio de prueba: " + e.message);
   } finally {
@@ -843,9 +867,41 @@ function renderMessages(container, messages) {
     bubble.className = "bubble " + m.sender;
     const label = m.sender === "patient" ? "Paciente" : m.sender === "bot" ? "Bot" : m.sender === "human_agent" ? "Agente" : "Sistema";
     bubble.innerHTML = linkify(m.body) + `<span class="meta">${label} · ${formatTime(m.created_at)}${m.intent ? " · " + escapeHtml(m.intent) : ""}</span>`;
+    if (m.has_voice_note) {
+      const voiceBtn = document.createElement("button");
+      voiceBtn.className = "voice-note-btn";
+      voiceBtn.title = "Reproducir nota de voz (prototipo)";
+      voiceBtn.textContent = "🔊 Escuchar nota de voz";
+      voiceBtn.addEventListener("click", () => playSimulatorVoiceNote(m.id, voiceBtn));
+      bubble.appendChild(voiceBtn);
+    }
     container.appendChild(bubble);
   }
   container.scrollTop = container.scrollHeight;
+}
+
+async function playSimulatorVoiceNote(messageId, button) {
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "⏳ generando...";
+  try {
+    const res = await fetch(`/simulator/messages/${messageId}/voice-note`);
+    if (!res.ok) {
+      let detail = `Error ${res.status}`;
+      try { detail = (await res.json()).detail || detail; } catch (e) {}
+      throw new Error(detail);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.addEventListener("ended", () => URL.revokeObjectURL(url));
+    await audio.play();
+  } catch (err) {
+    alert("No se pudo reproducir la nota de voz (prototipo): " + err.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
 }
 
 // Display text only — the underlying status/priority values (and the CSS

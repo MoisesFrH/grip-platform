@@ -11,9 +11,10 @@ Not for production: no auth, single hardcoded tenant by default, and the
 for itself (see the UI at GET /simulator).
 """
 
+import base64
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -24,7 +25,7 @@ from app.models.conversation import Conversation, ConversationStatus
 from app.models.message import Message, MessageSender
 from app.models.tenant import Tenant
 from app.services import appointments as appointments_service
-from app.services import crm, human_inbox
+from app.services import crm, human_inbox, voice_reminders
 from app.services.gemini_client import GeminiClient
 from app.services.orchestrator import process_inbound_message
 
@@ -84,6 +85,7 @@ class MessageOut(BaseModel):
     body: str | None
     intent: str | None
     created_at: str
+    has_voice_note: bool = False
 
 
 class ConversationOut(BaseModel):
@@ -104,6 +106,7 @@ class TestReminderRequest(BaseModel):
     whatsapp_profile_name: str | None = None
     therapist_name: str = "María Fernanda Ruiz"
     hours_until_appointment: float = 20.0  # inside the "tomorrow" window appointments.appointments_needing_reminder uses
+    include_voice: bool = False  # also attach a voice-note version (see voice_reminders.py prototype)
 
 
 class TestReminderResponse(BaseModel):
@@ -111,6 +114,8 @@ class TestReminderResponse(BaseModel):
     appointment_id: str
     scheduled_at: str
     reminder_text: str
+    voice_message_id: str | None = None
+    voice_error: str | None = None
 
 
 class ClaimRequest(BaseModel):
@@ -176,12 +181,53 @@ def send_test_reminder(payload: TestReminderRequest, db: Session = Depends(get_d
         .order_by(Conversation.started_at.desc())
         .first()
     )
+
+    voice_message_id: str | None = None
+    voice_error: str | None = None
+    if payload.include_voice:
+        # A SEPARATE message, right after the text one — same framing as
+        # everywhere else this prototype shows up: GRIP keeps sending
+        # text, this is only ever an additional voice-note version, never
+        # a replacement (see app/services/voice_reminders.py's docstring).
+        # The audio itself is stashed as base64 in the message's own
+        # extra_metadata — fine for a prototype demo; a real feature would
+        # want proper media storage instead of a JSON column.
+        try:
+            audio = voice_reminders.synthesize_reminder_voice(reminder_text)
+            voice_message = crm.record_outbound_message(db, conversation, reminder_text, sender=MessageSender.SYSTEM)
+            voice_message.extra_metadata = {
+                "kind": "voice_reminder_prototype",
+                "voice_note_audio_base64": base64.b64encode(audio).decode("ascii"),
+            }
+            db.commit()
+            voice_message_id = str(voice_message.id)
+        except voice_reminders.VoiceSynthesisError as exc:
+            db.rollback()
+            voice_error = str(exc)
+
     return TestReminderResponse(
         conversation_id=str(conversation.id),
         appointment_id=str(appointment.id),
         scheduled_at=appointment.scheduled_at.isoformat(),
         reminder_text=reminder_text,
+        voice_message_id=voice_message_id,
+        voice_error=voice_error,
     )
+
+
+@router.get("/messages/{message_id}/voice-note")
+def get_voice_note_audio(message_id: str, db: Session = Depends(get_db)) -> Response:
+    """Serves the audio for a message created with include_voice=True
+    above. No staff auth here (unlike the CRM's equivalent endpoint) —
+    the simulator itself has none either; this is dev-only, per this
+    file's module docstring."""
+    message = db.query(Message).filter(Message.id == message_id).one_or_none()
+    if message is None:
+        raise HTTPException(status_code=404, detail="Mensaje no encontrado.")
+    audio_b64 = (message.extra_metadata or {}).get("voice_note_audio_base64")
+    if not audio_b64:
+        raise HTTPException(status_code=404, detail="Este mensaje no tiene nota de voz.")
+    return Response(content=base64.b64decode(audio_b64), media_type="audio/ogg")
 
 
 @router.get("/conversations/by-phone/{tenant_slug}/{phone}/messages", response_model=list[MessageOut])
@@ -283,6 +329,7 @@ def _message_out(message: Message) -> MessageOut:
         body=message.body,
         intent=message.intent,
         created_at=message.created_at.isoformat(),
+        has_voice_note=bool((message.extra_metadata or {}).get("voice_note_audio_base64")),
     )
 
 
