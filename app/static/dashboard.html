@@ -3,206 +3,353 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>GRIP — Dashboard</title>
+<title>GRIP — Panel de métricas</title>
+<link href="https://fonts.googleapis.com" rel="preconnect" />
+<link crossorigin href="https://fonts.gstatic.com" rel="preconnect" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
 <style>
   :root {
-    --bg: #f5f6f8;
-    --panel: #ffffff;
-    --border: #e2e5e9;
-    --muted: #6b7280;
-    --text: #1f2430;
-    --accent: #128c7e;
-    --danger: #c0392b;
-    --warn: #b7791f;
-    --info: #2563eb;
+    /* Material Design 3 tokens, healthcare palette: teal/green primary,
+       terracotta reserved ONLY for critical alerts (never a general
+       "tech dark" accent). Adapted from the Stitch mockup's own token
+       set, kept as-is since the client (GRIP) liked this palette. */
+    --primary: #0f5238;
+    --on-primary: #ffffff;
+    --primary-container: #2d6a4f;
+    --on-primary-container: #a8e7c5;
+    --primary-fixed: #b1f0ce;
+    --primary-fixed-dim: #95d4b3;
+
+    --secondary: #31647a;
+    --on-secondary: #ffffff;
+    --secondary-container: #b1e4fd;
+    --secondary-fixed: #bde9ff;
+
+    --tertiary: #83271a;
+    --on-tertiary: #ffffff;
+    --tertiary-container: #a33e2f;
+    --tertiary-fixed: #ffdad4;
+
+    --error: #ba1a1a;
+    --error-container: #ffdad6;
+    --on-error-container: #93000a;
+
+    --background: #faf9f7;
+    --on-background: #1a1c1b;
+    --surface: #faf9f7;
+    --surface-bright: #faf9f7;
+    --surface-dim: #dadad8;
+    --surface-container-lowest: #ffffff;
+    --surface-container-low: #f4f3f1;
+    --surface-container: #efeeec;
+    --surface-container-high: #e9e8e6;
+    --surface-container-highest: #e3e2e0;
+    --on-surface: #1a1c1b;
+    --on-surface-variant: #404943;
+    --outline: #707973;
+    --outline-variant: #bfc9c1;
   }
+
   * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
   body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: var(--bg);
-    color: var(--text);
+    font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--background);
+    color: var(--on-surface);
+    -webkit-font-smoothing: antialiased;
   }
+  .material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+    font-size: 18px;
+    line-height: 1;
+    vertical-align: middle;
+  }
+
+  /* ---------- header ---------- */
   header {
-    background: var(--accent);
-    color: white;
-    padding: 14px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(250, 249, 247, 0.95);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--surface-container-highest);
+  }
+  .header-inner {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 14px 20px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .header-top {
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
+    gap: 12px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
     gap: 10px;
   }
-  header h1 { font-size: 1.05rem; margin: 0; font-weight: 600; }
-  header .sub { font-size: 0.78rem; opacity: 0.9; margin-top: 2px; }
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--primary);
+    color: var(--on-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: -0.02em;
+    flex-shrink: 0;
+  }
+  .brand-text { display: flex; flex-direction: column; line-height: 1.2; }
+  .brand-text .name { font-weight: 700; font-size: 1rem; color: var(--primary); letter-spacing: -0.01em; }
+  .brand-text .sub { font-size: 0.72rem; color: var(--on-surface-variant); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--surface-container-lowest);
+    font-size: 0.72rem;
+    color: var(--on-surface-variant);
+    box-shadow: 0 1px 4px rgba(15, 82, 56, 0.06);
+  }
+  .badge-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--primary-fixed-dim);
+  }
+
   .period-select {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 0.82rem;
+    gap: 6px;
+    background: var(--surface-container-low);
+    border-radius: 10px;
+    padding: 4px 10px 4px 12px;
+    font-size: 0.8rem;
   }
   .period-select select {
-    padding: 5px 8px;
-    border-radius: 6px;
     border: none;
-    font-size: 0.82rem;
+    background: transparent;
+    font: inherit;
+    color: var(--on-surface);
+    padding: 4px 2px;
+    cursor: pointer;
   }
+  .period-select select:focus { outline: none; }
 
+  .header-sub {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .header-sub h1 { font-size: 1.15rem; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  .header-sub .loc { font-size: 0.82rem; color: var(--on-surface-variant); }
+
+  /* ---------- layout ---------- */
   main {
-    max-width: 1100px;
+    max-width: 1240px;
     margin: 0 auto;
     padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
   }
 
-  .stat-row {
+  .metrics-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-    gap: 14px;
-    margin-bottom: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 16px;
   }
-  .stat-card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px 16px;
+  .metric-card {
+    background: var(--surface-container-lowest);
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 1px 3px rgba(15, 82, 56, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: relative;
+    overflow: hidden;
   }
-  .stat-card .label {
-    font-size: 0.72rem;
+  .metric-card .top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .metric-card .label {
+    font-size: 0.68rem;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--muted);
-    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+    color: var(--on-surface-variant);
+    font-weight: 600;
   }
-  .stat-card .value {
-    font-size: 1.6rem;
+  .metric-card .title { font-size: 0.92rem; font-weight: 600; color: var(--on-surface); }
+  .metric-icon {
+    width: 38px; height: 38px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .metric-card .value {
+    font-size: 2.3rem;
     font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 8px 0 2px;
   }
-  .stat-card .value.danger { color: var(--danger); }
-  .stat-card .footnote {
-    font-size: 0.72rem;
-    color: var(--muted);
-    margin-top: 4px;
+  .metric-card .footnote {
+    font-size: 0.76rem;
+    color: var(--on-surface-variant);
+    padding-top: 8px;
+    margin: 8px -18px -18px;
+    padding: 10px 18px;
+    background: var(--surface-container-low);
+    border-radius: 0 0 18px 18px;
+  }
+
+  .metric-card.primary .value { color: var(--primary); }
+  .metric-card.primary .metric-icon { background: rgba(177, 240, 206, 0.5); color: var(--primary); }
+  .metric-card.secondary .value { color: var(--secondary); }
+  .metric-card.secondary .metric-icon { background: rgba(189, 233, 255, 0.5); color: var(--secondary); }
+  .metric-card.tertiary .value { color: var(--tertiary); }
+  .metric-card.tertiary .metric-icon { background: rgba(255, 218, 212, 0.6); color: var(--tertiary); }
+  .metric-card.tertiary .footnote { background: rgba(255, 218, 212, 0.2); }
+  .metric-card.tertiary::before {
+    content: "";
+    position: absolute; top: -24px; right: -24px;
+    width: 90px; height: 90px; border-radius: 50%;
+    background: rgba(255, 218, 212, 0.35);
+    filter: blur(6px);
   }
 
   .panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
-    margin-bottom: 18px;
+    background: var(--surface-container-lowest);
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 1px 3px rgba(15, 82, 56, 0.06);
   }
-  .panel h2 {
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--muted);
-    margin: 0 0 14px;
-  }
-
-  /* daily volume bar chart, no external library */
-  .bar-chart {
+  .panel-head {
     display: flex;
-    align-items: flex-end;
-    gap: 4px;
-    height: 140px;
-    padding-top: 10px;
-  }
-  .bar-chart .bar-col {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: flex-end;
-    height: 100%;
-    min-width: 6px;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
   }
-  .bar-chart .bar {
-    width: 100%;
-    background: var(--accent);
-    border-radius: 3px 3px 0 0;
-    min-height: 2px;
-  }
-  .bar-chart .bar-count {
-    font-size: 0.62rem;
-    color: var(--muted);
-    margin-bottom: 2px;
-  }
-  .bar-chart .bar-label {
-    font-size: 0.6rem;
-    color: var(--muted);
-    margin-top: 4px;
-    white-space: nowrap;
-    transform: rotate(0deg);
-  }
+  .panel-head .material-symbols-outlined { color: var(--primary); font-size: 18px; }
+  .panel-head h2 { font-size: 0.95rem; margin: 0; font-weight: 700; color: var(--on-surface); }
+  .panel-head .count { font-size: 0.78rem; color: var(--on-surface-variant); }
 
-  .hbar-row {
-    display: grid;
-    grid-template-columns: 140px 1fr 46px;
-    align-items: center;
-    gap: 10px;
-    font-size: 0.82rem;
-    margin-bottom: 8px;
-  }
-  .hbar-row .name { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .hbar-track { background: #eef0f3; border-radius: 5px; height: 14px; overflow: hidden; }
-  .hbar-fill { height: 100%; background: var(--accent); border-radius: 5px; }
-  .hbar-row .count { text-align: right; color: var(--muted); font-size: 0.78rem; }
-
-  .status-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 10px;
-  }
-  .status-chip {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-  }
-  .status-chip .n { font-size: 1.1rem; font-weight: 700; }
-  .status-chip .s { font-size: 0.72rem; color: var(--muted); }
-
-  .safety-grid {
+  .two-col {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
   }
-  @media (max-width: 640px) {
-    .safety-grid { grid-template-columns: 1fr; }
+  @media (max-width: 760px) {
+    .two-col { grid-template-columns: 1fr; }
   }
 
-  .empty-note {
-    color: var(--muted);
-    font-size: 0.85rem;
-    padding: 10px 0;
+  /* segmented status bar */
+  .segbar { width: 100%; height: 12px; border-radius: 999px; overflow: hidden; display: flex; background: var(--surface-container); }
+  .segbar .seg { height: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .legend-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: var(--surface-container-low);
+    font-size: 0.8rem;
+    flex: 1 1 150px;
   }
+  .legend-chip .sw { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-chip .n { font-weight: 700; }
+  .legend-chip .s { color: var(--on-surface-variant); font-size: 0.74rem; }
 
-  .loading {
-    text-align: center;
-    color: var(--muted);
-    padding: 40px;
+  /* daily bar chart */
+  .bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 140px; padding-top: 10px; }
+  .bar-chart .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 6px; }
+  .bar-chart .bar { width: 100%; background: var(--primary-container); border-radius: 4px 4px 0 0; min-height: 2px; }
+  .bar-chart .bar-count { font-size: 0.62rem; color: var(--on-surface-variant); margin-bottom: 2px; }
+  .bar-chart .bar-label { font-size: 0.6rem; color: var(--on-surface-variant); margin-top: 4px; white-space: nowrap; }
+
+  .hbar-row { display: grid; grid-template-columns: 150px 1fr 40px; align-items: center; gap: 10px; font-size: 0.82rem; margin-bottom: 8px; }
+  .hbar-row .name { color: var(--on-surface); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hbar-track { background: var(--surface-container); border-radius: 999px; height: 12px; overflow: hidden; }
+  .hbar-fill { height: 100%; background: var(--primary-container); border-radius: 999px; }
+  .hbar-fill.tertiary { background: var(--tertiary); }
+  .hbar-row .count { text-align: right; color: var(--on-surface-variant); font-size: 0.78rem; }
+
+  .empty-note { color: var(--on-surface-variant); font-size: 0.85rem; padding: 10px 0; }
+  .loading { text-align: center; color: var(--on-surface-variant); padding: 60px 20px; }
+
+  footer {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 8px 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--on-surface-variant);
+    font-size: 0.72rem;
   }
+  footer .material-symbols-outlined { font-size: 14px; color: var(--primary); }
 </style>
 </head>
 <body>
 
 <header>
-  <div>
-    <h1>GRIP — Dashboard</h1>
-    <div class="sub">Métricas de conversaciones del asistente de WhatsApp</div>
-  </div>
-  <div class="period-select">
-    <span>Periodo:</span>
-    <select id="period-select">
-      <option value="7">Últimos 7 días</option>
-      <option value="30" selected>Últimos 30 días</option>
-      <option value="90">Últimos 90 días</option>
-    </select>
+  <div class="header-inner">
+    <div class="header-top">
+      <div class="brand">
+        <div class="brand-mark">G</div>
+        <div class="brand-text">
+          <span class="name">GRIP</span>
+          <span class="sub">Centro de Psicología · Panel interno</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <span class="badge-pill"><span class="dot"></span> Datos en vivo de la plataforma de WhatsApp</span>
+        <div class="period-select">
+          <span class="material-symbols-outlined">calendar_today</span>
+          <select id="period-select">
+            <option value="7">Últimos 7 días</option>
+            <option value="30" selected>Últimos 30 días</option>
+            <option value="90">Últimos 90 días</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="header-sub">
+      <h1>Panel de comunicación con pacientes</h1>
+      <span class="loc">Santo Domingo, República Dominicana</span>
+    </div>
   </div>
 </header>
 
 <main id="main-content">
   <div class="loading">Cargando métricas…</div>
 </main>
+
+<footer>
+  <span class="material-symbols-outlined">shield</span>
+  Este panel muestra únicamente conteos y categorías — nunca el contenido de las conversaciones de los pacientes.
+</footer>
 
 <script>
 const TENANT_SLUG = "grip";
@@ -221,6 +368,7 @@ const INTENT_LABELS_ES = {
   APPOINTMENT_CHANGE: "Cambio de cita",
   APPOINTMENT_CANCEL: "Cancelar cita",
   APPOINTMENT_PROBLEM: "Problema con una cita",
+  APPOINTMENT_REMINDER_REPLY: "Respuesta a recordatorio de cita",
   CLINICAL_QUESTION: "Pregunta clínica",
   SAFETY_RISK: "Riesgo / seguridad",
   HUMAN_REQUEST: "Pidió hablar con humano",
@@ -235,6 +383,16 @@ const STATUS_LABELS_ES = {
   HUMAN_RESOLVED: "Resuelto",
   BOT_RESUMED: "Bot reanudado",
   CLOSED: "Cerrado",
+};
+
+const STATUS_COLORS = {
+  BOT_ACTIVE: "#2d6a4f",
+  WAITING_FOR_PATIENT: "#95d4b3",
+  WAITING_FOR_HUMAN: "#ffb4a7",
+  HUMAN_ACTIVE: "#31647a",
+  HUMAN_RESOLVED: "#bde9ff",
+  BOT_RESUMED: "#b1f0ce",
+  CLOSED: "#bfc9c1",
 };
 
 const PRIORITY_LABELS_ES = {
@@ -275,7 +433,7 @@ function renderBarChart(byDay) {
   const cols = byDay
     .map((d) => {
       const heightPct = Math.max((d.count / max) * 100, d.count > 0 ? 6 : 0);
-      const label = new Date(d.date + "T00:00:00").toLocaleDateString([], { day: "2-digit", month: "2-digit" });
+      const label = new Date(d.date + "T00:00:00").toLocaleDateString("es-DO", { day: "2-digit", month: "2-digit" });
       return `
         <div class="bar-col" title="${label}: ${d.count}">
           <div class="bar-count">${d.count > 0 ? d.count : ""}</div>
@@ -287,7 +445,8 @@ function renderBarChart(byDay) {
   return `<div class="bar-chart">${cols}</div>`;
 }
 
-function renderHBars(rows, labelMap, total) {
+function renderHBars(rows, labelMap, opts) {
+  opts = opts || {};
   if (rows.length === 0) {
     return `<div class="empty-note">Sin datos en este periodo.</div>`;
   }
@@ -296,28 +455,44 @@ function renderHBars(rows, labelMap, total) {
     .map((r) => {
       const label = labelMap[r.key] || r.key;
       const pct = Math.max((r.count / max) * 100, 4);
+      const fillClass = opts.tertiary ? "hbar-fill tertiary" : "hbar-fill";
       return `
         <div class="hbar-row">
           <div class="name">${escapeHtml(label)}</div>
-          <div class="hbar-track"><div class="hbar-fill" style="width:${pct}%"></div></div>
+          <div class="hbar-track"><div class="${fillClass}" style="width:${pct}%"></div></div>
           <div class="count">${r.count}</div>
         </div>`;
     })
     .join("");
 }
 
-function renderStatusGrid(byStatus) {
-  const entries = Object.entries(byStatus);
-  if (entries.length === 0) return `<div class="empty-note">Sin conversaciones todavía.</div>`;
-  return `<div class="status-grid">${entries
-    .map(
-      ([status, count]) => `
-      <div class="status-chip">
-        <div class="n">${count}</div>
-        <div class="s">${STATUS_LABELS_ES[status] || status}</div>
-      </div>`
-    )
-    .join("")}</div>`;
+function renderStatusBreakdown(byStatus, totalActive) {
+  const entries = Object.entries(byStatus).filter(([, count]) => count > 0);
+  if (entries.length === 0) {
+    return `<div class="empty-note">Sin conversaciones todavía.</div>`;
+  }
+  const total = entries.reduce((sum, [, count]) => sum + count, 0) || 1;
+  const segs = entries
+    .map(([status, count]) => {
+      const pct = (count / total) * 100;
+      const color = STATUS_COLORS[status] || "#bfc9c1";
+      return `<div class="seg" style="width:${pct}%; background:${color};" title="${STATUS_LABELS_ES[status] || status}: ${count}"></div>`;
+    })
+    .join("");
+  const chips = entries
+    .map(([status, count]) => {
+      const color = STATUS_COLORS[status] || "#bfc9c1";
+      return `
+        <div class="legend-chip">
+          <span class="sw" style="background:${color}"></span>
+          <div>
+            <div class="n">${count}</div>
+            <div class="s">${STATUS_LABELS_ES[status] || status}</div>
+          </div>
+        </div>`;
+    })
+    .join("");
+  return `<div class="segbar">${segs}</div><div class="legend">${chips}</div>`;
 }
 
 function render(data) {
@@ -329,61 +504,103 @@ function render(data) {
   const safety = data.safety;
 
   const intentRows = intents.map((i) => ({ key: i.intent, count: i.count }));
-  const handoffPriorityRows = Object.entries(handoff.by_priority).map(([k, v]) => ({ key: k, count: v }));
+  const handoffPriorityRows = Object.entries(handoff.by_priority)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => ({ key: k, count: v }));
   const safetyPriorityRows = Object.entries(safety.by_priority)
     .filter(([, v]) => v > 0)
     .map(([k, v]) => ({ key: k, count: v }));
   const safetyCategoryRows = Object.entries(safety.by_category).map(([k, v]) => ({ key: k, count: v }));
 
+  const totalActive = Object.values(conv.by_status).reduce((a, b) => a + b, 0);
+
   main.innerHTML = `
-    <div class="stat-row">
-      <div class="stat-card">
-        <div class="label">Conversaciones nuevas</div>
+    <div class="metrics-row">
+      <div class="metric-card primary">
+        <div class="top">
+          <div>
+            <div class="label">Conversaciones</div>
+            <div class="title">Nuevas por WhatsApp</div>
+          </div>
+          <div class="metric-icon"><span class="material-symbols-outlined">chat_bubble</span></div>
+        </div>
         <div class="value">${conv.total_new}</div>
-        <div class="footnote">últimos ${data.period_days} días</div>
+        <div class="footnote">Últimos ${data.period_days} días</div>
       </div>
-      <div class="stat-card">
-        <div class="label">Tasa de handoff a humano</div>
+
+      <div class="metric-card secondary">
+        <div class="top">
+          <div>
+            <div class="label">Escalamiento</div>
+            <div class="title">Enviadas a un agente</div>
+          </div>
+          <div class="metric-icon"><span class="material-symbols-outlined">support_agent</span></div>
+        </div>
         <div class="value">${Math.round(handoff.rate * 100)}%</div>
         <div class="footnote">${handoff.handed_off} de ${handoff.total_conversations} conversaciones</div>
       </div>
-      <div class="stat-card">
-        <div class="label">Alertas de seguridad/clínicas</div>
-        <div class="value ${safety.total_alerts > 0 ? "danger" : ""}">${safety.total_alerts}</div>
-        <div class="footnote">SAFETY_RISK + CLINICAL_QUESTION</div>
+
+      <div class="metric-card tertiary">
+        <div class="top">
+          <div>
+            <div class="label">Cola clínica</div>
+            <div class="title">Alertas de seguridad</div>
+          </div>
+          <div class="metric-icon"><span class="material-symbols-outlined">priority_high</span></div>
+        </div>
+        <div class="value">${safety.total_alerts}</div>
+        <div class="footnote">Riesgo/seguridad + preguntas clínicas, últimos ${data.period_days} días</div>
       </div>
     </div>
 
     <div class="panel">
-      <h2>Conversaciones nuevas por día</h2>
+      <div class="panel-head">
+        <span class="material-symbols-outlined">pie_chart</span>
+        <h2>Estado actual de las conversaciones</h2>
+        <span class="count">(${totalActive} en total, no solo este periodo)</span>
+      </div>
+      ${renderStatusBreakdown(conv.by_status, totalActive)}
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <span class="material-symbols-outlined">show_chart</span>
+        <h2>Conversaciones nuevas por día</h2>
+      </div>
       ${renderBarChart(conv.new_per_day)}
     </div>
 
-    <div class="panel">
-      <h2>Conversaciones por estado (todas, no solo este periodo)</h2>
-      ${renderStatusGrid(conv.by_status)}
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="material-symbols-outlined">quiz</span>
+          <h2>De qué preguntan más los pacientes</h2>
+        </div>
+        ${renderHBars(intentRows, INTENT_LABELS_ES)}
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <span class="material-symbols-outlined">support_agent</span>
+          <h2>Escalamientos por prioridad</h2>
+        </div>
+        ${renderHBars(handoffPriorityRows, PRIORITY_LABELS_ES)}
+      </div>
     </div>
 
     <div class="panel">
-      <h2>De qué preguntan más los pacientes</h2>
-      ${renderHBars(intentRows, INTENT_LABELS_ES)}
-    </div>
-
-    <div class="panel">
-      <h2>Handoffs por prioridad</h2>
-      ${renderHBars(handoffPriorityRows, PRIORITY_LABELS_ES)}
-    </div>
-
-    <div class="panel">
-      <h2>Detalle de alertas de seguridad</h2>
-      <div class="safety-grid">
+      <div class="panel-head">
+        <span class="material-symbols-outlined" style="color: var(--tertiary)">emergency</span>
+        <h2>Detalle de alertas de seguridad</h2>
+      </div>
+      <div class="two-col">
         <div>
-          <div class="footnote" style="margin-bottom:8px">Por tipo</div>
-          ${renderHBars(safetyPriorityRows, { SAFETY_RISK: "Riesgo (crítico)", CLINICAL_QUESTION: "Pregunta clínica" })}
+          <div class="empty-note" style="padding-bottom:4px">Por tipo</div>
+          ${renderHBars(safetyPriorityRows, { SAFETY_RISK: "Riesgo (crítico)", CLINICAL_QUESTION: "Pregunta clínica" }, { tertiary: true })}
         </div>
         <div>
-          <div class="footnote" style="margin-bottom:8px">Por categoría</div>
-          ${renderHBars(safetyCategoryRows, SAFETY_CATEGORY_LABELS_ES)}
+          <div class="empty-note" style="padding-bottom:4px">Por categoría</div>
+          ${renderHBars(safetyCategoryRows, SAFETY_CATEGORY_LABELS_ES, { tertiary: true })}
         </div>
       </div>
     </div>

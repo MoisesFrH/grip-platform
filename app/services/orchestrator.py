@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.message import MessageSender
 from app.models.tenant import Tenant
-from app.services import crm
+from app.services import appointments, crm
 from app.services.conversation_state import Actor, ConversationEvent, apply_transition
 from app.services.intent_classifier import IntentClassificationResult, classify_intent
 from app.services.intents import IntentCategory
@@ -116,6 +116,56 @@ def process_inbound_message(
             tools_used=[],
             awaiting_human=True,
         )
+
+    # --- Reminder-reply guard: runs BEFORE intent classification, on
+    # purpose. If this contact has an appointment reminder awaiting a
+    # reply and this message reads like a cancel/reschedule request (a
+    # deterministic keyword check — see app.services.appointments), that
+    # always goes to a human, full stop. This does not wait for Gemini to
+    # classify it as APPOINTMENT_CHANGE/APPOINTMENT_CANCEL — a
+    # misclassification there would mean the bot quietly no-ops on a
+    # patient trying to cancel or move their appointment, which is
+    # exactly the failure mode this guard exists to rule out.
+    pending_appointment = appointments.find_pending_reminder_for_contact(db, tenant, contact)
+    if pending_appointment is not None:
+        reminder_signal = appointments.classify_reminder_reply(body)
+        if reminder_signal is not None:
+            appointments.apply_reminder_reply(pending_appointment, reminder_signal)
+            for msg in conversation.messages[-1:]:
+                msg.intent = "APPOINTMENT_REMINDER_REPLY"
+            if reminder_signal.value == "CANCEL_OR_RESCHEDULE":
+                reply_text = _handoff(
+                    db,
+                    conversation,
+                    reason="Patient replied to an appointment reminder with a cancel/reschedule request.",
+                    priority="HIGH",
+                    patient_message=appointments.RESCHEDULE_HANDOFF_MESSAGE,
+                )
+                return OrchestratorResult(
+                    conversation_id=str(conversation.id),
+                    status=conversation.status,
+                    reply_text=reply_text,
+                    classification=None,
+                    tools_used=[],
+                    awaiting_human=True,
+                )
+            else:  # CONFIRMED
+                # Short-circuits here rather than falling through to intent
+                # classification: a bare "sí" / "confirmado" has nothing
+                # else for the classifier to work with, and would otherwise
+                # land on OTHER_UNCLEAR and trigger an unnecessary
+                # clarifying question right after the patient already gave
+                # a clear answer.
+                reply_text = appointments.APPOINTMENT_CONFIRMED_REPLY
+                crm.record_outbound_message(db, conversation, reply_text, sender=MessageSender.BOT)
+                return OrchestratorResult(
+                    conversation_id=str(conversation.id),
+                    status=conversation.status,
+                    reply_text=reply_text,
+                    classification=None,
+                    tools_used=[],
+                    awaiting_human=False,
+                )
 
     # --- Bot is active: safety check + intent classification + routing ---
     classification = classify_intent(tenant, body, gemini_client=gemini_client)

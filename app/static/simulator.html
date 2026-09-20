@@ -337,7 +337,45 @@
   }
   .badge.WAITING_FOR_HUMAN { background: #fdecea; color: var(--danger); }
   .badge.HUMAN_ACTIVE { background: #e6f4ea; color: #1e7e34; }
-  .badge.priority-CRITICAL { background: var(--danger); color: white; }
+  .badge.priority-CRITICAL { background: var(--danger); color: white; animation: badge-pulse 1.4s infinite; }
+  @keyframes badge-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(192, 57, 41, 0.55); }
+    50% { box-shadow: 0 0 0 5px rgba(192, 57, 41, 0); }
+  }
+
+  .alarm-toggle {
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.12);
+    color: white;
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .alarm-toggle.on { background: #fff; color: var(--accent); font-weight: 600; }
+
+  .critical-banner {
+    background: var(--danger);
+    color: white;
+    padding: 10px 16px;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .critical-banner.visible { display: flex; }
+  .critical-banner button {
+    background: white;
+    color: var(--danger);
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
   .badge.priority-HIGH { background: var(--warn); color: white; }
   .badge.priority-MEDIUM { background: #d0d7de; color: #333; }
   .badge.priority-LOW { background: #eee; color: #666; }
@@ -413,7 +451,14 @@
 <header>
   <div>GRIP — Simulador de conversación</div>
   <div class="sub">sin Twilio, sin costo — patient chat + agent inbox</div>
+  <button id="alarm-toggle-btn" class="alarm-toggle" title="Activar sonido para casos urgentes">
+    🔕 Activar alertas de sonido
+  </button>
 </header>
+<div id="critical-banner" class="critical-banner">
+  <span id="critical-banner-text">⚠️ Nueva conversación urgente esperando a un agente</span>
+  <button id="critical-banner-mute">Silenciar</button>
+</div>
 
 <div class="layout">
   <!-- LEFT: patient side, styled as a WhatsApp phone screen -->
@@ -653,6 +698,122 @@ let lastConversations = [];
 // A fixed "logged in agent" name for this simulator — good enough for a demo.
 const AGENT_NAME = "secretaria_1";
 
+// ================= URGENT-CASE ALARM =================
+// Browsers block audio until the person interacts with the page at least
+// once, so the "Activar alertas de sonido" button both unlocks that and
+// doubles as a clear on/off control the secretary can see.
+const alarmToggleBtn = document.getElementById("alarm-toggle-btn");
+const criticalBanner = document.getElementById("critical-banner");
+const criticalBannerText = document.getElementById("critical-banner-text");
+const criticalBannerMuteBtn = document.getElementById("critical-banner-mute");
+
+let alarmAudioCtx = null;
+let alarmEnabled = localStorage.getItem("simulator_alarm_enabled") === "1";
+let alarmIntervalId = null;
+// Conversation ids the secretary has already been alerted about, so
+// re-polling every 3s doesn't re-trigger the chime for the same case —
+// only claiming it (or explicitly silencing) clears an entry.
+const acknowledgedCriticalIds = new Set();
+
+function setAlarmButtonState() {
+  alarmToggleBtn.textContent = alarmEnabled ? "🔔 Alertas de sonido activadas" : "🔕 Activar alertas de sonido";
+  alarmToggleBtn.classList.toggle("on", alarmEnabled);
+}
+setAlarmButtonState();
+
+function playChimeOnce() {
+  if (!alarmAudioCtx) return;
+  const now = alarmAudioCtx.currentTime;
+  // Two-tone "urgent" chime rather than a single beep, so it reads as an
+  // alarm rather than a generic notification sound.
+  [880, 660].forEach((freq, i) => {
+    const osc = alarmAudioCtx.createOscillator();
+    const gain = alarmAudioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.value = 0.0001;
+    osc.connect(gain);
+    gain.connect(alarmAudioCtx.destination);
+    const start = now + i * 0.22;
+    gain.gain.exponentialRampToValueAtTime(0.2, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35);
+    osc.start(start);
+    osc.stop(start + 0.4);
+  });
+}
+
+function startAlarmLoop(bannerText) {
+  criticalBannerText.textContent = bannerText;
+  criticalBanner.classList.add("visible");
+  if (alarmIntervalId) return; // already sounding
+  if (alarmEnabled) {
+    playChimeOnce();
+    alarmIntervalId = setInterval(playChimeOnce, 2500);
+  }
+}
+
+function stopAlarmLoop() {
+  criticalBanner.classList.remove("visible");
+  if (alarmIntervalId) {
+    clearInterval(alarmIntervalId);
+    alarmIntervalId = null;
+  }
+}
+
+alarmToggleBtn.addEventListener("click", () => {
+  if (!alarmAudioCtx) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    alarmAudioCtx = new AudioCtx();
+  }
+  alarmAudioCtx.resume();
+  alarmEnabled = !alarmEnabled;
+  localStorage.setItem("simulator_alarm_enabled", alarmEnabled ? "1" : "0");
+  setAlarmButtonState();
+  if (alarmEnabled) {
+    playChimeOnce(); // confirms audibly that it's on
+  } else {
+    stopAlarmLoop();
+  }
+});
+
+criticalBannerMuteBtn.addEventListener("click", () => {
+  // Silences the current alarm without requiring the case to be claimed —
+  // the secretary may just be acknowledging it while stepping away, not
+  // handling it yet. It reappears if ANOTHER new critical case comes in.
+  for (const conv of lastConversations) {
+    if (conv.status === "WAITING_FOR_HUMAN" && conv.handoff_priority === "CRITICAL") {
+      acknowledgedCriticalIds.add(conv.id);
+    }
+  }
+  stopAlarmLoop();
+});
+
+function checkForNewCriticalCases(conversations) {
+  const currentCriticalWaiting = conversations.filter(
+    (c) => c.status === "WAITING_FOR_HUMAN" && c.handoff_priority === "CRITICAL"
+  );
+  const unacknowledged = currentCriticalWaiting.filter((c) => !acknowledgedCriticalIds.has(c.id));
+
+  if (unacknowledged.length > 0) {
+    const label =
+      unacknowledged.length === 1
+        ? `⚠️ Caso urgente esperando: ${unacknowledged[0].contact_name || unacknowledged[0].contact_phone}`
+        : `⚠️ ${unacknowledged.length} casos urgentes esperando a un agente`;
+    startAlarmLoop(label);
+  } else {
+    stopAlarmLoop();
+  }
+
+  // Once a critical case stops being WAITING_FOR_HUMAN (claimed, or
+  // otherwise moved on), drop it from the acknowledged set so a FUTURE
+  // critical case can alarm again even if it happens to reuse... nothing
+  // reuses ids, but this keeps the set from growing forever.
+  const stillWaitingIds = new Set(currentCriticalWaiting.map((c) => c.id));
+  for (const id of Array.from(acknowledgedCriticalIds)) {
+    if (!stillWaitingIds.has(id)) acknowledgedCriticalIds.delete(id);
+  }
+}
+
 function renderMessages(container, messages) {
   container.innerHTML = "";
   for (const m of messages) {
@@ -721,6 +882,7 @@ async function refreshInboxList() {
   try {
     lastConversations = await api(`/simulator/conversations?tenant_slug=${TENANT_SLUG}`);
     renderInboxList(lastConversations);
+    checkForNewCriticalCases(lastConversations);
     if (selectedConversationId) {
       await refreshInboxDetail();
     }
