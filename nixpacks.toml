@@ -1,0 +1,8 @@
+# Tells Railway's build system (Nixpacks) to install ffmpeg alongside the
+# Python app. Needed only for app/services/voice_reminders.py's prototype
+# (converting Gemini's TTS output to the OGG/Opus format WhatsApp requires
+# for a voice note) — nothing else in the app uses it. Without this file,
+# Railway's default Python image doesn't include ffmpeg, and the voice
+# preview endpoint fails with "ffmpeg is not installed/available".
+[phases.setup]
+aptPkgs = ["ffmpeg"]
