@@ -1,490 +1,205 @@
 """
-GET /crm — the staff-authenticated screen for patients, appointments and
-clinical notes. This is the real internal tool /dashboard deliberately is
-NOT: /dashboard shows only counts and categories to anyone who finds the
-URL, while everything here requires a login and enforces two roles:
+CRM service layer (architecture doc §4 steps 3-7, §11 CRM data model).
 
-  SECRETARY  patients + appointments (create/reschedule/mark status).
-             Never sees clinical note content — not hidden by the UI
-             alone, the API itself refuses it (see require_doctor).
-  DOCTOR     everything a secretary sees, plus clinical notes and
-             recommendations (read + write).
-
-Accounts are created by scripts/create_staff.py, not a signup screen —
-see that script's docstring for why.
+This is the channel-agnostic core of "a message came in, what conversation
+does it belong to, and how do we safely record it" — it knows nothing about
+Twilio, WhatsApp webhooks, or HTTP. The future webhook handler is a thin
+adapter that extracts (tenant, phone, body, twilio_message_id) from a
+Twilio POST and calls into this module. That seam is deliberate: it's what
+lets the whole pipeline built so far (safety, intent classifier, Gemini
+tools, state machine) be exercised and tested today, before a Twilio
+account is wired up at all.
 """
 
-import hmac
-import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
-from app.core.db import get_db
-from app.models.appointment import Appointment, AppointmentStatus
-from app.models.clinical_note import ClinicalNoteType
 from app.models.contact import Contact
-from app.models.staff import Staff, StaffRole, StaffSession
+from app.models.conversation import Conversation, ConversationStatus
+from app.models.message import Message, MessageDirection, MessageSender, MessageStatus
 from app.models.tenant import Tenant
-from app.services import appointments as appointments_service
-from app.services import auth, clinical_notes, voice_reminders
-
-router = APIRouter(prefix="/crm", tags=["crm"])
 
 
-# --- auth dependencies -----------------------------------------------------
+def normalize_whatsapp_address(raw: str) -> str:
+    """Strips Twilio's 'whatsapp:' scheme prefix, leaving the bare phone
+    number (or BSUID-format address) used as the CRM's contact key.
+    'whatsapp:+593999999999' -> '+593999999999'."""
+    return raw.removeprefix("whatsapp:").strip()
 
 
-def get_current_staff(request: Request, db: Session = Depends(get_db)) -> Staff:
-    token = request.cookies.get(auth.SESSION_COOKIE_NAME)
-    if not token:
-        raise HTTPException(status_code=401, detail="No has iniciado sesión.")
+def get_or_create_contact(db: Session, tenant: Tenant, phone: str, whatsapp_profile_name: str | None = None) -> Contact:
+    """One contact per (tenant_id, phone) — architecture doc §11. Idempotent:
+    calling this twice for the same tenant+phone returns the same row."""
+    phone = normalize_whatsapp_address(phone)
 
-    token_hash = auth.hash_session_token(token)
-    session = db.query(StaffSession).filter(StaffSession.token_hash == token_hash).one_or_none()
-    if session is None or session.expires_at < datetime.now(session.expires_at.tzinfo):
-        raise HTTPException(status_code=401, detail="Tu sesión expiró. Inicia sesión de nuevo.")
+    contact = (
+        db.query(Contact)
+        .filter(Contact.tenant_id == tenant.id, Contact.phone == phone)
+        .one_or_none()
+    )
 
-    staff = db.query(Staff).filter(Staff.id == session.staff_id, Staff.is_active.is_(True)).one_or_none()
-    if staff is None:
-        raise HTTPException(status_code=401, detail="Cuenta inactiva.")
-    return staff
+    now = datetime.now(timezone.utc)
 
-
-def require_doctor(staff: Staff = Depends(get_current_staff)) -> Staff:
-    """Gate for anything touching ClinicalNote. The frontend also hides
-    these controls from a secretary, but that's a UX nicety, not the
-    actual boundary — this dependency is."""
-    if staff.role != StaffRole.DOCTOR:
-        raise HTTPException(status_code=403, detail="Solo el personal médico puede ver o crear notas clínicas.")
-    return staff
-
-
-def _get_tenant(db: Session, staff: Staff) -> Tenant:
-    return db.query(Tenant).filter(Tenant.id == staff.tenant_id).one()
-
-
-def _check_bootstrap_secret(provided: str) -> None:
-    """Guards POST /crm/bootstrap-staff — see Settings.staff_bootstrap_secret.
-    404 (not 401/403) both when the feature is off and when the secret is
-    wrong, so the endpoint doesn't even reveal it exists to someone probing
-    without the secret. hmac.compare_digest avoids leaking the secret's
-    length/prefix through response-timing differences."""
-    configured = get_settings().staff_bootstrap_secret
-    if not configured or not hmac.compare_digest(provided, configured):
-        raise HTTPException(status_code=404, detail="Not Found")
-
-
-def _get_contact_or_404(db: Session, staff: Staff, contact_id: str) -> Contact:
-    """Every patient lookup is scoped to the logged-in staff member's own
-    tenant — a GRIP secretary can never fetch another tenant's patient by
-    guessing a UUID, even before there is a second tenant to worry about."""
-    try:
-        contact_uuid = uuid.UUID(contact_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado.")
-    contact = db.query(Contact).filter(Contact.id == contact_uuid, Contact.tenant_id == staff.tenant_id).one_or_none()
     if contact is None:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado.")
+        contact = Contact(
+            tenant_id=tenant.id,
+            phone=phone,
+            whatsapp_profile_name=whatsapp_profile_name,
+            last_interaction_at=now,
+        )
+        db.add(contact)
+        db.flush()  # assigns contact.id without committing the transaction
+    else:
+        contact.last_interaction_at = now
+        if whatsapp_profile_name and not contact.whatsapp_profile_name:
+            contact.whatsapp_profile_name = whatsapp_profile_name
+
     return contact
 
 
-def _get_appointment_or_404(db: Session, staff: Staff, appointment_id: str) -> Appointment:
-    try:
-        appointment_uuid = uuid.UUID(appointment_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Cita no encontrada.")
-    appointment = (
-        db.query(Appointment)
-        .filter(Appointment.id == appointment_uuid, Appointment.tenant_id == staff.tenant_id)
-        .one_or_none()
-    )
-    if appointment is None:
-        raise HTTPException(status_code=404, detail="Cita no encontrada.")
-    return appointment
+def lock_contact_conversation_pipeline(db: Session, contact: Contact) -> None:
+    """
+    Acquires a Postgres transaction-scoped advisory lock keyed on this
+    contact's id, before anything else touches their conversation.
+
+    This exists because SELECT ... FOR UPDATE, on its own, CANNOT prevent
+    the race that matters most here: two concurrent requests (a Twilio
+    retry, or the patient firing off two messages back to back) both
+    finding "no open conversation yet" and both creating one. Under
+    Postgres's default READ COMMITTED isolation, a row that another,
+    still-open transaction has inserted but not committed is simply
+    invisible to a concurrent SELECT — FOR UPDATE has nothing to lock
+    onto, so it does not block. An advisory lock has no such gap: it is
+    keyed on the contact, not on a row that may not exist yet, so the
+    second caller blocks until the first transaction commits or rolls
+    back, and only then does its own (now correctly informed) lookup.
+
+    Must be called inside an open transaction — the lock releases
+    automatically at commit/rollback (pg_advisory_XACT_lock), so it can
+    never be leaked by a crashed process holding a session-level lock
+    forever.
+    """
+    # hashtext() collapses the UUID to a 32-bit int; pg_advisory_xact_lock
+    # takes it as a bigint. A hash collision between two different
+    # contacts just serializes them unnecessarily for an instant — safe,
+    # merely a little more conservative than it strictly needs to be.
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": str(contact.id)})
 
 
-# --- schemas ----------------------------------------------------------------
+def get_open_conversation_for_update(db: Session, tenant: Tenant, contact: Contact) -> Conversation | None:
+    """
+    Row-locks (SELECT ... FOR UPDATE) the contact's open conversation, if
+    one already exists, so a second transaction that arrives AFTER this
+    one has committed sees a consistent row to update rather than a
+    half-written one. This alone does not prevent double-creation (see
+    lock_contact_conversation_pipeline) — the two are meant to be used
+    together, which get_or_create_open_conversation below does.
 
-
-class LoginRequest(BaseModel):
-    tenant_slug: str = "grip"
-    username: str
-    password: str
-
-
-class StaffOut(BaseModel):
-    display_name: str
-    role: str
-
-
-class BootstrapStaffRequest(BaseModel):
-    secret: str
-    tenant_slug: str = "grip"
-    username: str
-    display_name: str
-    role: str
-    password: str
-
-
-class PatientSummaryOut(BaseModel):
-    id: str
-    name: str | None
-    phone: str
-    status: str
-    last_interaction_at: str | None
-
-
-class AppointmentOut(BaseModel):
-    id: str
-    therapist_name: str
-    scheduled_at: str
-    status: str
-    reminder_sent_at: str | None
-    reminder_response: str | None
-
-
-class ClinicalNoteOut(BaseModel):
-    id: str
-    note_type: str
-    author_name: str
-    content: str
-    created_at: str
-    appointment_id: str | None
-
-
-class PatientDetailOut(BaseModel):
-    id: str
-    name: str | None
-    phone: str
-    status: str
-    appointments: list[AppointmentOut]
-    notes: list[ClinicalNoteOut] | None  # None (not just []) when the caller is a secretary — omitted, not emptied
-
-
-class CreateAppointmentRequest(BaseModel):
-    therapist_name: str
-    scheduled_at: datetime
-
-
-class UpdateAppointmentRequest(BaseModel):
-    therapist_name: str | None = None
-    scheduled_at: datetime | None = None
-    status: str | None = None
-
-
-class UpdatePatientRequest(BaseModel):
-    # Just the name for now — it's the one field the voice-reminder
-    # prototype needs (build_reminder_message already personalizes with
-    # contact.name when it's set) and it isn't clinical data, so either
-    # role can set it. WhatsApp only gives us whatsapp_profile_name
-    # automatically, which is often a nickname or not set at all.
-    name: str | None = None
-
-
-class CreateNoteRequest(BaseModel):
-    note_type: str
-    content: str
-    appointment_id: str | None = None
-
-
-# --- auth routes -------------------------------------------------------------
-
-
-@router.post("/login", response_model=StaffOut)
-def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)) -> StaffOut:
-    tenant = db.query(Tenant).filter(Tenant.slug == payload.tenant_slug).one_or_none()
-    staff = (
-        db.query(Staff)
-        .filter(Staff.tenant_id == tenant.id, Staff.username == payload.username, Staff.is_active.is_(True))
-        .one_or_none()
-        if tenant is not None
-        else None
-    )
-    # Same generic error whether the tenant, the username, or the password
-    # was wrong — never reveal which one failed.
-    if staff is None or not auth.verify_password(payload.password, staff.password_hash):
-        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
-
-    token = auth.new_session_token()
-    session = StaffSession(
-        staff_id=staff.id,
-        token_hash=auth.hash_session_token(token),
-        created_at=datetime.now(staff.created_at.tzinfo),
-        expires_at=auth.new_session_expiry(),
-    )
-    db.add(session)
-    db.commit()
-
-    response.set_cookie(
-        auth.SESSION_COOKIE_NAME,
-        token,
-        httponly=True,
-        secure=get_settings().app_env == "production",
-        samesite="lax",
-        max_age=auth.SESSION_TTL_HOURS * 3600,
-    )
-    return StaffOut(display_name=staff.display_name, role=staff.role.value)
-
-
-@router.post("/logout")
-def logout(request: Request, response: Response, db: Session = Depends(get_db)) -> dict:
-    token = request.cookies.get(auth.SESSION_COOKIE_NAME)
-    if token:
-        db.query(StaffSession).filter(StaffSession.token_hash == auth.hash_session_token(token)).delete()
-        db.commit()
-    response.delete_cookie(auth.SESSION_COOKIE_NAME)
-    return {"ok": True}
-
-
-@router.get("/me", response_model=StaffOut)
-def me(staff: Staff = Depends(get_current_staff)) -> StaffOut:
-    return StaffOut(display_name=staff.display_name, role=staff.role.value)
-
-
-# --- one-time staff bootstrap (no login required — see _check_bootstrap_secret) ---
-
-
-@router.post("/bootstrap-staff", response_model=StaffOut)
-def bootstrap_staff(payload: BootstrapStaffRequest, db: Session = Depends(get_db)) -> StaffOut:
-    _check_bootstrap_secret(payload.secret)
-
-    tenant = db.query(Tenant).filter(Tenant.slug == payload.tenant_slug).one_or_none()
-    if tenant is None:
-        raise HTTPException(status_code=400, detail=f"No existe un tenant con slug '{payload.tenant_slug}'.")
-
-    try:
-        role = StaffRole(payload.role.upper())
-    except ValueError:
-        raise HTTPException(status_code=400, detail="El rol debe ser 'secretary' o 'doctor'.")
-
-    if len(payload.password) < 8:
-        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres.")
-
-    staff = (
-        db.query(Staff)
-        .filter(Staff.tenant_id == tenant.id, Staff.username == payload.username)
-        .one_or_none()
-    )
-    if staff is None:
-        staff = Staff(tenant_id=tenant.id, username=payload.username, display_name=payload.display_name, role=role)
-        db.add(staff)
-    else:
-        # Same "safe to re-run" behavior as scripts/create_staff.py: updates
-        # and reactivates an existing account rather than failing.
-        staff.display_name = payload.display_name
-        staff.role = role
-        staff.is_active = True
-    staff.password_hash = auth.hash_password(payload.password)
-    db.commit()
-    return StaffOut(display_name=staff.display_name, role=staff.role.value)
-
-
-# --- patients ----------------------------------------------------------------
-
-
-@router.get("/patients", response_model=list[PatientSummaryOut])
-def list_patients(staff: Staff = Depends(get_current_staff), db: Session = Depends(get_db)) -> list[PatientSummaryOut]:
-    contacts = (
-        db.query(Contact)
-        .filter(Contact.tenant_id == staff.tenant_id)
-        .order_by(Contact.last_interaction_at.desc().nullslast())
-        .all()
-    )
-    return [
-        PatientSummaryOut(
-            id=str(c.id),
-            name=c.name or c.whatsapp_profile_name,
-            phone=c.phone,
-            status=c.status.value,
-            last_interaction_at=c.last_interaction_at.isoformat() if c.last_interaction_at else None,
+    Returns None when the contact has no open conversation — including
+    when their most recent one is CLOSED, which is exactly the "patient
+    returns days later" case (architecture doc §11): that gets a brand
+    new conversation, never a reopened one.
+    """
+    return (
+        db.query(Conversation)
+        .filter(
+            Conversation.tenant_id == tenant.id,
+            Conversation.contact_id == contact.id,
+            Conversation.status != ConversationStatus.CLOSED,
         )
-        for c in contacts
-    ]
-
-
-@router.get("/patients/{contact_id}", response_model=PatientDetailOut)
-def get_patient(contact_id: str, staff: Staff = Depends(get_current_staff), db: Session = Depends(get_db)) -> PatientDetailOut:
-    contact = _get_contact_or_404(db, staff, contact_id)
-    appointment_rows = (
-        db.query(Appointment)
-        .filter(Appointment.contact_id == contact.id)
-        .order_by(Appointment.scheduled_at.desc())
-        .all()
-    )
-    notes_out = None
-    if staff.role == StaffRole.DOCTOR:
-        tenant = _get_tenant(db, staff)
-        notes_out = [
-            ClinicalNoteOut(
-                id=str(n.id),
-                note_type=n.note_type.value,
-                author_name=n.author_name,
-                content=n.content,
-                created_at=n.created_at.isoformat(),
-                appointment_id=str(n.appointment_id) if n.appointment_id else None,
-            )
-            for n in clinical_notes.list_notes_for_contact(db, tenant, contact)
-        ]
-
-    return PatientDetailOut(
-        id=str(contact.id),
-        name=contact.name or contact.whatsapp_profile_name,
-        phone=contact.phone,
-        status=contact.status.value,
-        appointments=[
-            AppointmentOut(
-                id=str(a.id),
-                therapist_name=a.therapist_name,
-                scheduled_at=a.scheduled_at.isoformat(),
-                status=a.status.value,
-                reminder_sent_at=a.reminder_sent_at.isoformat() if a.reminder_sent_at else None,
-                reminder_response=a.reminder_response.value if a.reminder_response else None,
-            )
-            for a in appointment_rows
-        ],
-        notes=notes_out,
+        .order_by(Conversation.started_at.desc())
+        .with_for_update()
+        .first()
     )
 
 
-@router.patch("/patients/{contact_id}", response_model=PatientDetailOut)
-def update_patient_route(
-    contact_id: str,
-    payload: UpdatePatientRequest,
-    staff: Staff = Depends(get_current_staff),
-    db: Session = Depends(get_db),
-) -> PatientDetailOut:
-    contact = _get_contact_or_404(db, staff, contact_id)
-    if payload.name is not None:
-        contact.name = payload.name.strip() or None
-    db.commit()
-    return get_patient(contact_id, staff, db)
+def get_or_create_open_conversation(db: Session, tenant: Tenant, contact: Contact) -> Conversation:
+    """
+    The single entry point the router calls. Acquires the per-contact
+    advisory lock FIRST — that's what makes the rest of this function
+    safe to call concurrently for the same contact from two different
+    requests/threads/processes.
+    """
+    lock_contact_conversation_pipeline(db, contact)
 
+    conversation = get_open_conversation_for_update(db, tenant, contact)
+    if conversation is not None:
+        return conversation
 
-# --- appointments (secretary + doctor) ---------------------------------------
-
-
-@router.post("/patients/{contact_id}/appointments", response_model=AppointmentOut)
-def create_appointment_route(
-    contact_id: str,
-    payload: CreateAppointmentRequest,
-    staff: Staff = Depends(get_current_staff),
-    db: Session = Depends(get_db),
-) -> AppointmentOut:
-    contact = _get_contact_or_404(db, staff, contact_id)
-    tenant = _get_tenant(db, staff)
-    appointment = appointments_service.create_appointment(
-        db, tenant, contact, therapist_name=payload.therapist_name, scheduled_at=payload.scheduled_at
+    now = datetime.now(timezone.utc)
+    conversation = Conversation(
+        tenant_id=tenant.id,
+        contact_id=contact.id,
+        status=ConversationStatus.BOT_ACTIVE,
+        started_at=now,
+        last_message_at=now,
     )
-    db.commit()
-    return AppointmentOut(
-        id=str(appointment.id),
-        therapist_name=appointment.therapist_name,
-        scheduled_at=appointment.scheduled_at.isoformat(),
-        status=appointment.status.value,
-        reminder_sent_at=None,
-        reminder_response=None,
+    db.add(conversation)
+    db.flush()
+    return conversation
+
+
+def record_inbound_message(
+    db: Session,
+    conversation: Conversation,
+    body: str,
+    twilio_message_id: str | None = None,
+    intent: str | None = None,
+) -> Message:
+    """
+    Idempotent on twilio_message_id (architecture doc §4 step 2): if a
+    message with that Twilio SID was already recorded — a webhook retry
+    after a slow response, most commonly — this returns the EXISTING row
+    instead of inserting a duplicate.
+    """
+    if twilio_message_id:
+        existing = db.query(Message).filter(Message.twilio_message_id == twilio_message_id).one_or_none()
+        if existing is not None:
+            return existing
+
+    message = Message(
+        tenant_id=conversation.tenant_id,
+        # Set via the relationship (not just conversation_id) so
+        # conversation.messages reflects this new row immediately in
+        # memory — callers like the orchestrator read conversation.messages
+        # right after recording, and setting only the raw FK would leave
+        # that in-memory collection stale until the session re-queries it.
+        conversation=conversation,
+        direction=MessageDirection.INBOUND,
+        sender=MessageSender.PATIENT,
+        body=body,
+        intent=intent,
+        twilio_message_id=twilio_message_id,
+        status=MessageStatus.RECEIVED,
     )
+    db.add(message)
+    conversation.last_message_at = datetime.now(timezone.utc)
+    db.flush()
+    return message
 
 
-@router.patch("/appointments/{appointment_id}", response_model=AppointmentOut)
-def update_appointment_route(
-    appointment_id: str,
-    payload: UpdateAppointmentRequest,
-    staff: Staff = Depends(get_current_staff),
-    db: Session = Depends(get_db),
-) -> AppointmentOut:
-    appointment = _get_appointment_or_404(db, staff, appointment_id)
-
-    if payload.therapist_name is not None:
-        appointment.therapist_name = payload.therapist_name
-    if payload.scheduled_at is not None:
-        appointment.scheduled_at = payload.scheduled_at
-    if payload.status is not None:
-        try:
-            appointment.status = AppointmentStatus(payload.status)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Estado de cita inválido: {payload.status}")
-
-    db.commit()
-    return AppointmentOut(
-        id=str(appointment.id),
-        therapist_name=appointment.therapist_name,
-        scheduled_at=appointment.scheduled_at.isoformat(),
-        status=appointment.status.value,
-        reminder_sent_at=appointment.reminder_sent_at.isoformat() if appointment.reminder_sent_at else None,
-        reminder_response=appointment.reminder_response.value if appointment.reminder_response else None,
+def record_outbound_message(
+    db: Session,
+    conversation: Conversation,
+    body: str,
+    sender: MessageSender,
+    twilio_message_id: str | None = None,
+) -> Message:
+    """sender distinguishes a bot-generated reply from a human agent's own
+    message — both are 'outbound' but the router/human-inbox need to tell
+    them apart (architecture doc §18 audit trail)."""
+    message = Message(
+        tenant_id=conversation.tenant_id,
+        conversation=conversation,
+        direction=MessageDirection.OUTBOUND,
+        sender=sender,
+        body=body,
+        twilio_message_id=twilio_message_id,
+        status=MessageStatus.QUEUED,
     )
-
-
-# --- clinical notes (doctor only) --------------------------------------------
-
-
-@router.post("/patients/{contact_id}/notes", response_model=ClinicalNoteOut)
-def create_note_route(
-    contact_id: str,
-    payload: CreateNoteRequest,
-    staff: Staff = Depends(require_doctor),
-    db: Session = Depends(get_db),
-) -> ClinicalNoteOut:
-    contact = _get_contact_or_404(db, staff, contact_id)
-    tenant = _get_tenant(db, staff)
-    try:
-        note_type = ClinicalNoteType(payload.note_type)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Tipo de nota inválido: {payload.note_type}")
-
-    appointment_uuid = uuid.UUID(payload.appointment_id) if payload.appointment_id else None
-    note = clinical_notes.add_clinical_note(
-        db,
-        tenant,
-        contact,
-        author_name=staff.display_name,
-        note_type=note_type,
-        content=payload.content,
-        appointment_id=appointment_uuid,
-    )
-    db.commit()
-    return ClinicalNoteOut(
-        id=str(note.id),
-        note_type=note.note_type.value,
-        author_name=note.author_name,
-        content=note.content,
-        created_at=note.created_at.isoformat(),
-        appointment_id=str(note.appointment_id) if note.appointment_id else None,
-    )
-
-
-# --- voice reminder prototype (secretary + doctor) ---------------------------
-#
-# PROTOTYPE ONLY — lets staff listen to what a reminder would sound like as
-# a WhatsApp voice note. Does not send anything to the patient and does not
-# touch Appointment.reminder_sent_at; appointments_service.send_reminder
-# (the real pipeline) is completely untouched by this. Needs GEMINI_API_KEY
-# configured and outbound network access to Google's API to actually work.
-
-
-@router.get("/patients/{contact_id}/appointments/{appointment_id}/voice-reminder-preview")
-def voice_reminder_preview(
-    contact_id: str,
-    appointment_id: str,
-    staff: Staff = Depends(get_current_staff),
-    db: Session = Depends(get_db),
-) -> Response:
-    contact = _get_contact_or_404(db, staff, contact_id)
-    appointment = _get_appointment_or_404(db, staff, appointment_id)
-    if appointment.contact_id != contact.id:
-        raise HTTPException(status_code=404, detail="Cita no encontrada.")
-
-    text = appointments_service.build_reminder_message(appointment, contact)
-    try:
-        audio = voice_reminders.synthesize_reminder_voice(text)
-    except voice_reminders.VoiceSynthesisError as exc:
-        # 502: the failure is Gemini's/ffmpeg's, not something wrong with
-        # this request — matters for telling a real bug apart from "this
-        # environment can't reach Google's API" while prototyping.
-        raise HTTPException(status_code=502, detail=str(exc))
-    return Response(content=audio, media_type="audio/ogg")
+    db.add(message)
+    conversation.last_message_at = datetime.now(timezone.utc)
+    db.flush()
+    return message

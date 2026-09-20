@@ -30,7 +30,7 @@ from app.models.contact import Contact
 from app.models.staff import Staff, StaffRole, StaffSession
 from app.models.tenant import Tenant
 from app.services import appointments as appointments_service
-from app.services import auth, clinical_notes
+from app.services import auth, clinical_notes, voice_reminders
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 
@@ -174,6 +174,15 @@ class UpdateAppointmentRequest(BaseModel):
     therapist_name: str | None = None
     scheduled_at: datetime | None = None
     status: str | None = None
+
+
+class UpdatePatientRequest(BaseModel):
+    # Just the name for now — it's the one field the voice-reminder
+    # prototype needs (build_reminder_message already personalizes with
+    # contact.name when it's set) and it isn't clinical data, so either
+    # role can set it. WhatsApp only gives us whatsapp_profile_name
+    # automatically, which is often a nickname or not set at all.
+    name: str | None = None
 
 
 class CreateNoteRequest(BaseModel):
@@ -341,6 +350,20 @@ def get_patient(contact_id: str, staff: Staff = Depends(get_current_staff), db: 
     )
 
 
+@router.patch("/patients/{contact_id}", response_model=PatientDetailOut)
+def update_patient_route(
+    contact_id: str,
+    payload: UpdatePatientRequest,
+    staff: Staff = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+) -> PatientDetailOut:
+    contact = _get_contact_or_404(db, staff, contact_id)
+    if payload.name is not None:
+        contact.name = payload.name.strip() or None
+    db.commit()
+    return get_patient(contact_id, staff, db)
+
+
 # --- appointments (secretary + doctor) ---------------------------------------
 
 
@@ -433,3 +456,35 @@ def create_note_route(
         created_at=note.created_at.isoformat(),
         appointment_id=str(note.appointment_id) if note.appointment_id else None,
     )
+
+
+# --- voice reminder prototype (secretary + doctor) ---------------------------
+#
+# PROTOTYPE ONLY — lets staff listen to what a reminder would sound like as
+# a WhatsApp voice note. Does not send anything to the patient and does not
+# touch Appointment.reminder_sent_at; appointments_service.send_reminder
+# (the real pipeline) is completely untouched by this. Needs GEMINI_API_KEY
+# configured and outbound network access to Google's API to actually work.
+
+
+@router.get("/patients/{contact_id}/appointments/{appointment_id}/voice-reminder-preview")
+def voice_reminder_preview(
+    contact_id: str,
+    appointment_id: str,
+    staff: Staff = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+) -> Response:
+    contact = _get_contact_or_404(db, staff, contact_id)
+    appointment = _get_appointment_or_404(db, staff, appointment_id)
+    if appointment.contact_id != contact.id:
+        raise HTTPException(status_code=404, detail="Cita no encontrada.")
+
+    text = appointments_service.build_reminder_message(appointment, contact)
+    try:
+        audio = voice_reminders.synthesize_reminder_voice(text)
+    except voice_reminders.VoiceSynthesisError as exc:
+        # 502: the failure is Gemini's/ffmpeg's, not something wrong with
+        # this request — matters for telling a real bug apart from "this
+        # environment can't reach Google's API" while prototyping.
+        raise HTTPException(status_code=502, detail=str(exc))
+    return Response(content=audio, media_type="audio/ogg")
