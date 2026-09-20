@@ -65,6 +65,15 @@ class Conversation(UUIDPKMixin, TenantMixin, TimestampMixin, Base):
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Set once, the first time this conversation escalates (orchestrator._handoff)
+    # and the first time an agent claims it (human_inbox.claim_conversation).
+    # Neither can be reliably derived from updated_at (TimestampMixin bumps
+    # that on ANY change to the row, not just these two), so they get their
+    # own columns — this is what the "time to claim a critical case" metric
+    # is computed from (see app.services.analytics.time_to_claim_critical).
+    handoff_triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     contact: Mapped["Contact"] = relationship(back_populates="conversations")
     messages: Mapped[list["Message"]] = relationship(
         back_populates="conversation", order_by="Message.created_at"

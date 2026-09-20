@@ -16,7 +16,9 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.appointment import Appointment
+from statistics import median
+
+from app.models.appointment import Appointment, AppointmentStatus
 from app.models.contact import Contact
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageDirection
@@ -267,6 +269,177 @@ def safety_alerts(db: Session, tenant: Tenant, days: int = 30) -> dict:
     }
 
 
+def no_show_rate(db: Session, tenant: Tenant, days: int = 30) -> dict:
+    """Of appointments that have already happened (scheduled_at in the
+    past, within the window) and were marked one way or the other, what
+    fraction were a no-show. Appointments still SCHEDULED/CONFIRMED with a
+    past date aren't counted either way — nobody has recorded an outcome
+    for them yet, and counting an un-reviewed appointment as a "show"
+    would understate the real rate. NOTE: nothing in this codebase marks
+    COMPLETED/NO_SHOW automatically yet (there's no staff screen to do it
+    from) — this will read as 0/0 until that exists."""
+    since = _since(days)
+    now = datetime.now(timezone.utc)
+
+    rows = (
+        db.query(Appointment.status, func.count(Appointment.id))
+        .filter(
+            Appointment.tenant_id == tenant.id,
+            Appointment.scheduled_at >= since,
+            Appointment.scheduled_at <= now,
+            Appointment.status.in_([AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW]),
+        )
+        .group_by(Appointment.status)
+        .all()
+    )
+    counts = {status.value: count for status, count in rows}
+    completed = counts.get("COMPLETED", 0)
+    no_show = counts.get("NO_SHOW", 0)
+    total = completed + no_show
+
+    return {
+        "completed": completed,
+        "no_show": no_show,
+        "rate": round(no_show / total, 3) if total else None,
+    }
+
+
+def time_to_claim_critical(db: Session, tenant: Tenant, days: int = 30) -> dict:
+    """How long a CRITICAL-priority handoff sat in WAITING_FOR_HUMAN before
+    an agent claimed it — averaged over conversations escalated in this
+    window that have since been claimed. Unclaimed ones aren't counted
+    (their wait isn't over yet, so including a partial wait would make the
+    average look better than it is); see safety_alerts for how many
+    CRITICAL cases are still open right now."""
+    since = _since(days)
+
+    rows = (
+        db.query(Conversation.handoff_triggered_at, Conversation.claimed_at)
+        .filter(
+            Conversation.tenant_id == tenant.id,
+            Conversation.handoff_priority == "CRITICAL",
+            Conversation.handoff_triggered_at.isnot(None),
+            Conversation.handoff_triggered_at >= since,
+            Conversation.claimed_at.isnot(None),
+        )
+        .all()
+    )
+    waits_seconds = [
+        (claimed_at - triggered_at).total_seconds()
+        for triggered_at, claimed_at in rows
+        if claimed_at >= triggered_at
+    ]
+
+    return {
+        "claimed_count": len(waits_seconds),
+        "average_seconds": round(sum(waits_seconds) / len(waits_seconds)) if waits_seconds else None,
+        "median_seconds": round(median(waits_seconds)) if waits_seconds else None,
+    }
+
+
+def new_vs_returning_patients(db: Session, tenant: Tenant, days: int = 30) -> dict:
+    """Of the contacts who messaged in this window, how many were writing
+    to GRIP for the very first time (Contact.created_at falls inside the
+    window — see crm.get_or_create_contact, which creates the row on a
+    person's first-ever message) versus already-known contacts writing
+    again."""
+    since = _since(days)
+
+    contact_created_at = (
+        db.query(Conversation.contact_id, Contact.created_at)
+        .join(Contact, Conversation.contact_id == Contact.id)
+        .filter(Conversation.tenant_id == tenant.id, Conversation.started_at >= since)
+        .distinct()
+        .all()
+    )
+    new_count = sum(1 for _, created_at in contact_created_at if created_at >= since)
+    returning_count = len(contact_created_at) - new_count
+
+    return {"new": new_count, "returning": returning_count}
+
+
+def volume_by_hour_and_weekday(db: Session, tenant: Tenant, days: int = 30) -> dict:
+    """When patients actually write in — the busiest hours of the day and
+    days of the week, from inbound message timestamps (not conversation
+    start, so a long-running conversation's later messages count too).
+    Hour is in UTC; the dashboard is responsible for any local-time
+    framing it wants to add. weekday follows Postgres's extract(dow):
+    0 = Sunday .. 6 = Saturday."""
+    since = _since(days)
+
+    hour_expr = func.extract("hour", Message.created_at)
+    weekday_expr = func.extract("dow", Message.created_at)
+
+    base_filter = (
+        Conversation.tenant_id == tenant.id,
+        Message.direction == MessageDirection.INBOUND,
+        Message.created_at >= since,
+    )
+
+    by_hour_rows = (
+        db.query(hour_expr.label("hour"), func.count(Message.id))
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .filter(*base_filter)
+        .group_by(hour_expr)
+        .all()
+    )
+    by_weekday_rows = (
+        db.query(weekday_expr.label("weekday"), func.count(Message.id))
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .filter(*base_filter)
+        .group_by(weekday_expr)
+        .all()
+    )
+
+    by_hour = {int(hour): 0 for hour in range(24)}
+    for hour, count in by_hour_rows:
+        by_hour[int(hour)] = count
+
+    by_weekday = {day: 0 for day in range(7)}
+    for weekday, count in by_weekday_rows:
+        by_weekday[int(weekday)] = count
+
+    return {
+        "by_hour": [by_hour[h] for h in range(24)],
+        "by_weekday": [by_weekday[d] for d in range(7)],  # index 0 = Sunday
+    }
+
+
+def patient_list(db: Session, tenant: Tenant, limit: int = 200) -> list[dict]:
+    """The closest thing to a "patient list" today: every contact who has
+    ever messaged this tenant, most recently active first. Administrative
+    fields only (name/phone/status/contact dates + counts) — no message
+    content, no clinical data. This is a read-only view, not the internal
+    CRM screen (with actual create/edit of appointments and notes) that
+    would need its own, staff-authenticated surface."""
+    rows = (
+        db.query(
+            Contact,
+            func.count(func.distinct(Conversation.id)),
+            func.count(func.distinct(Appointment.id)),
+        )
+        .outerjoin(Conversation, Conversation.contact_id == Contact.id)
+        .outerjoin(Appointment, Appointment.contact_id == Contact.id)
+        .filter(Contact.tenant_id == tenant.id)
+        .group_by(Contact.id)
+        .order_by(Contact.last_interaction_at.desc().nullslast())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "name": contact.name or contact.whatsapp_profile_name,
+            "phone": contact.phone,
+            "status": contact.status.value,
+            "first_contact_at": contact.created_at.isoformat(),
+            "last_interaction_at": contact.last_interaction_at.isoformat() if contact.last_interaction_at else None,
+            "conversation_count": conversation_count,
+            "appointment_count": appointment_count,
+        }
+        for contact, conversation_count, appointment_count in rows
+    ]
+
+
 def dashboard_summary(db: Session, tenant: Tenant, days: int = 30) -> dict:
     return {
         "tenant": tenant.slug,
@@ -277,4 +450,8 @@ def dashboard_summary(db: Session, tenant: Tenant, days: int = 30) -> dict:
         "top_intents": top_intents(db, tenant, days),
         "safety": safety_alerts(db, tenant, days),
         "appointments": appointments_overview(db, tenant, days),
+        "no_show": no_show_rate(db, tenant, days),
+        "time_to_claim_critical": time_to_claim_critical(db, tenant, days),
+        "patients_new_vs_returning": new_vs_returning_patients(db, tenant, days),
+        "volume_by_time": volume_by_hour_and_weekday(db, tenant, days),
     }

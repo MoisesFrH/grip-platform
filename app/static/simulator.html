@@ -82,6 +82,7 @@
     width: 300px;
     max-width: 90%;
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     align-items: center;
     margin-bottom: 14px;
@@ -469,6 +470,7 @@
         <input id="patient-phone" placeholder="Tu número simulado" />
       </div>
       <button id="new-patient-btn" title="Simular un paciente distinto">Nuevo paciente</button>
+      <button id="test-reminder-btn" title="Crea una cita de prueba mañana y envía el recordatorio ahora mismo">Probar recordatorio</button>
     </div>
 
     <div class="phone-frame">
@@ -678,6 +680,26 @@ patientPhoneInput.addEventListener("change", () => {
   localStorage.setItem("simulator_patient_phone", currentPatientPhone);
   waStatusEl.textContent = "en línea";
   refreshPatientChat();
+});
+
+const testReminderBtn = document.getElementById("test-reminder-btn");
+testReminderBtn.addEventListener("click", async () => {
+  testReminderBtn.disabled = true;
+  try {
+    const result = await api("/simulator/appointments/test-reminder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenant_slug: TENANT_SLUG, phone: currentPatientPhone }),
+    });
+    await refreshPatientChat();
+    await refreshInboxList();
+    const when = new Date(result.scheduled_at).toLocaleString("es-DO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    alert(`Recordatorio de prueba enviado a ${currentPatientPhone}.\nCita de prueba creada para: ${when}.\n\nAhora responde en el chat de la izquierda (por ejemplo "necesito cancelar" o "sí, ahí estaré") para ver cómo reacciona el sistema.`);
+  } catch (e) {
+    alert("Error creando el recordatorio de prueba: " + e.message);
+  } finally {
+    testReminderBtn.disabled = false;
+  }
 });
 
 newPatientBtn.addEventListener("click", () => {

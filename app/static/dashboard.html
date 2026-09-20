@@ -297,6 +297,20 @@
   .chart-legend .sw { width: 10px; height: 10px; border-radius: 3px; }
 
   /* reminder log table */
+  /* small metric row (no-show, time-to-claim, new vs returning) */
+  .mini-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .mini-stat { background: var(--surface-container-low); border-radius: 14px; padding: 14px 16px; }
+  .mini-stat .n { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
+  .mini-stat .n.tertiary-text { color: var(--tertiary); }
+  .mini-stat .l { font-size: 0.74rem; color: var(--on-surface-variant); margin-top: 2px; }
+
+  /* small vertical bar chart for hour/weekday volume, no counts/labels per bar */
+  .mini-bar-chart { display: flex; align-items: flex-end; gap: 3px; height: 70px; }
+  .mini-bar-chart .mbc-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; min-width: 4px; }
+  .mini-bar-chart .mbc-bar { width: 100%; background: var(--secondary); border-radius: 2px 2px 0 0; min-height: 2px; }
+  .mini-bar-chart-labels { display: flex; gap: 3px; margin-top: 4px; }
+  .mini-bar-chart-labels span { flex: 1; text-align: center; font-size: 0.58rem; color: var(--on-surface-variant); min-width: 4px; }
+
   .reminder-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
   .reminder-table th {
     text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em;
@@ -471,6 +485,51 @@ async function fetchReminders(days) {
   return res.json();
 }
 
+async function fetchPatients() {
+  const res = await fetch(`/dashboard/api/patients?tenant_slug=${TENANT_SLUG}&limit=200`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+const WEEKDAY_LABELS_ES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]; // index 0 = Sunday, matches Postgres extract(dow)
+const HOUR_LABELS = Array.from({ length: 24 }, (_, h) => (h % 3 === 0 ? String(h) : ""));
+
+function renderMiniBarChart(values, labels) {
+  const max = Math.max(...values, 1);
+  const bars = values
+    .map((v, i) => `<div class="mbc-col" title="${labels[i] || i}: ${v}"><div class="mbc-bar" style="height:${Math.max((v / max) * 100, v > 0 ? 6 : 0)}%"></div></div>`)
+    .join("");
+  const labelRow = labels.map((l) => `<span>${l}</span>`).join("");
+  return `<div class="mini-bar-chart">${bars}</div><div class="mini-bar-chart-labels">${labelRow}</div>`;
+}
+
+function renderPatientsTable(patients) {
+  if (patients.length === 0) {
+    return `<div class="empty-note">Todavía no hay pacientes registrados.</div>`;
+  }
+  const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString("es-DO", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—");
+  const rows = patients
+    .map(
+      (p) => `
+        <tr>
+          <td>${escapeHtml(p.name || p.phone)}</td>
+          <td>${escapeHtml(p.phone)}</td>
+          <td>${fmt(p.first_contact_at)}</td>
+          <td>${fmt(p.last_interaction_at)}</td>
+          <td>${p.conversation_count}</td>
+          <td>${p.appointment_count}</td>
+        </tr>`
+    )
+    .join("");
+  return `
+    <div class="table-scroll">
+      <table class="reminder-table">
+        <thead><tr><th>Paciente</th><th>Teléfono</th><th>Primer contacto</th><th>Última interacción</th><th>Conversaciones</th><th>Citas</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
 function renderStackedBarChart(byDay) {
   if (byDay.length === 0) {
     return `<div class="empty-note">Sin conversaciones nuevas en este periodo.</div>`;
@@ -583,7 +642,7 @@ function renderStatusBreakdown(byStatus, totalActive) {
   return `<div class="segbar">${segs}</div><div class="legend">${chips}</div>`;
 }
 
-function render(data, reminders) {
+function render(data, reminders, patients) {
   const main = document.getElementById("main-content");
 
   const conv = data.conversations;
@@ -666,6 +725,45 @@ function render(data, reminders) {
       ${renderStackedBarChart(data.conversations_by_outcome)}
     </div>
 
+    <div class="panel">
+      <div class="panel-head">
+        <span class="material-symbols-outlined">insights</span>
+        <h2>Indicadores clave</h2>
+      </div>
+      <div class="mini-stats">
+        <div class="mini-stat">
+          <div class="n ${data.no_show.rate !== null && data.no_show.rate > 0.15 ? 'tertiary-text' : ''}">${data.no_show.rate !== null ? Math.round(data.no_show.rate * 100) + '%' : '—'}</div>
+          <div class="l">Tasa de no-show (${data.no_show.no_show} de ${data.no_show.completed + data.no_show.no_show} citas resueltas)</div>
+        </div>
+        <div class="mini-stat">
+          <div class="n">${data.time_to_claim_critical.median_seconds !== null ? Math.round(data.time_to_claim_critical.median_seconds / 60) + ' min' : '—'}</div>
+          <div class="l">Mediana de espera para reclamar un caso critico (${data.time_to_claim_critical.claimed_count} casos)</div>
+        </div>
+        <div class="mini-stat">
+          <div class="n">${data.patients_new_vs_returning.new}</div>
+          <div class="l">Pacientes nuevos (vs. ${data.patients_new_vs_returning.returning} recurrentes)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="material-symbols-outlined">schedule</span>
+          <h2>Volumen por hora del dia</h2>
+          <span class="count">hora UTC</span>
+        </div>
+        ${renderMiniBarChart(data.volume_by_time.by_hour, HOUR_LABELS)}
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <span class="material-symbols-outlined">calendar_view_week</span>
+          <h2>Volumen por dia de la semana</h2>
+        </div>
+        ${renderMiniBarChart(data.volume_by_time.by_weekday, WEEKDAY_LABELS_ES)}
+      </div>
+    </div>
+
     <div class="two-col">
       <div class="panel">
         <div class="panel-head">
@@ -729,6 +827,15 @@ function render(data, reminders) {
       </div>
       ${renderRemindersTable(reminders)}
     </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <span class="material-symbols-outlined">groups</span>
+        <h2>Pacientes</h2>
+        <span class="count">${patients.length} en total — solo datos administrativos, sin notas clínicas</span>
+      </div>
+      ${renderPatientsTable(patients)}
+    </div>
   `;
 }
 
@@ -737,8 +844,8 @@ async function loadAndRender() {
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="loading">Cargando métricas…</div>`;
   try {
-    const [data, remindersResp] = await Promise.all([fetchSummary(days), fetchReminders(days)]);
-    render(data, remindersResp.reminders);
+    const [data, remindersResp, patientsResp] = await Promise.all([fetchSummary(days), fetchReminders(days), fetchPatients()]);
+    render(data, remindersResp.reminders, patientsResp.patients);
   } catch (e) {
     main.innerHTML = `<div class="empty-note">No se pudieron cargar las métricas: ${escapeHtml(e.message)}</div>`;
   }

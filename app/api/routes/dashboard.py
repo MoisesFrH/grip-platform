@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.models.tenant import Tenant
-from app.services.analytics import dashboard_summary, reminder_log
+from app.services.analytics import dashboard_summary, patient_list, reminder_log
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -42,3 +42,16 @@ def get_reminder_log(
 ) -> dict:
     tenant = _get_tenant(db, tenant_slug)
     return {"reminders": reminder_log(db, tenant, days=days, limit=limit)}
+
+
+@router.get("/api/patients")
+def get_patient_list(
+    tenant_slug: str = "grip",
+    limit: int = Query(default=200, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Administrative contact list only — see patient_list's docstring.
+    Not windowed by `days` like the other endpoints: a patient list is
+    "everyone we know," not "everyone active in the last N days.\""""
+    tenant = _get_tenant(db, tenant_slug)
+    return {"patients": patient_list(db, tenant, limit=limit)}

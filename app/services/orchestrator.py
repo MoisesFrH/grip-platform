@@ -16,6 +16,7 @@ same convention as app.services.crm.
 """
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -75,6 +76,12 @@ def _handoff(
     apply_transition(conversation, ConversationEvent.HANDOFF_TRIGGERED, Actor.BOT)
     conversation.handoff_reason = reason
     conversation.handoff_priority = priority
+    # Only the FIRST handoff counts for "time to claim" — a conversation
+    # that escalates, gets resolved, then escalates again shouldn't have
+    # this overwritten, or the metric would understate how long the first,
+    # possibly more urgent, wait actually was.
+    if conversation.handoff_triggered_at is None:
+        conversation.handoff_triggered_at = datetime.now(timezone.utc)
     crm.record_outbound_message(db, conversation, patient_message, sender=MessageSender.BOT)
     return patient_message
 

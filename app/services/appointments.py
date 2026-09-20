@@ -20,7 +20,10 @@ from sqlalchemy.orm import Session
 
 from app.models.appointment import Appointment, AppointmentStatus, ReminderResponse
 from app.models.contact import Contact
+from app.models.message import MessageSender
 from app.models.tenant import Tenant
+from app.services import crm
+from app.services.messaging import send_whatsapp_message
 
 # Deliberately broad and Dominican-Spanish-flavored; a false positive here
 # just means an ordinary reply gets a human's eyes on it too, which is the
@@ -185,3 +188,35 @@ def apply_reminder_reply(appointment: Appointment, response: ReminderResponse) -
         appointment.status = AppointmentStatus.CONFIRMED
     elif response == ReminderResponse.CANCEL_OR_RESCHEDULE:
         appointment.status = AppointmentStatus.RESCHEDULE_REQUESTED
+
+
+def _format_when(scheduled_at: datetime) -> str:
+    # Spanish, no year (it's always "tomorrow" in the real reminder job):
+    # "a las 3:00 p. m."
+    return scheduled_at.strftime("a las %I:%M %p").lower().replace("am", "a. m.").replace("pm", "p. m.")
+
+
+def build_reminder_message(appointment: Appointment, contact: Contact) -> str:
+    name_suffix = f" {contact.name}" if contact.name else ""
+    return APPOINTMENT_REMINDER_TEMPLATE.format(
+        name_suffix=name_suffix,
+        when=_format_when(appointment.scheduled_at),
+        therapist=appointment.therapist_name,
+    )
+
+
+def send_reminder(db: Session, tenant: Tenant, appointment: Appointment, contact: Contact) -> str:
+    """The one place that actually sends a reminder: builds the message,
+    records it as an outbound SYSTEM message (so it shows up in the
+    conversation transcript like any other message), marks the
+    appointment's reminder as sent, and calls the messaging stub. Shared
+    by scripts/send_appointment_reminders.py (the real daily job) and the
+    simulator's "probar recordatorio" button (app.api.routes.simulator) —
+    same code path either way, so testing it in the simulator actually
+    exercises the real logic, not a parallel copy of it."""
+    body = build_reminder_message(appointment, contact)
+    conversation = crm.get_or_create_open_conversation(db, tenant, contact)
+    crm.record_outbound_message(db, conversation, body, sender=MessageSender.SYSTEM)
+    mark_reminder_sent(appointment)
+    send_whatsapp_message(contact.phone, body)
+    return body

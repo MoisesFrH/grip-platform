@@ -8,6 +8,8 @@ calls.
 Never commits — the caller (an API route) owns the transaction.
 """
 
+from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session
 
 from app.models.conversation import Conversation, ConversationStatus
@@ -40,9 +42,13 @@ def list_active_conversations(db: Session, tenant: Tenant, agent_name: str | Non
 
 
 def claim_conversation(db: Session, conversation: Conversation, agent_name: str) -> Conversation:
-    """The 'take over' button (architecture doc §14)."""
+    """The 'take over' button (architecture doc §14). Records claimed_at
+    (overwritten on each claim, so it always reflects the most recent one)
+    — that's what the "time to claim a critical case" dashboard metric is
+    computed from, paired with handoff_triggered_at."""
     apply_transition(conversation, ConversationEvent.AGENT_CLAIMED, Actor.HUMAN_AGENT)
     conversation.assigned_to = agent_name
+    conversation.claimed_at = datetime.now(timezone.utc)
     db.flush()
     return conversation
 

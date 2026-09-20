@@ -11,6 +11,8 @@ Not for production: no auth, single hardcoded tenant by default, and the
 for itself (see the UI at GET /simulator).
 """
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -21,7 +23,8 @@ from app.models.contact import Contact
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.message import Message, MessageSender
 from app.models.tenant import Tenant
-from app.services import human_inbox
+from app.services import appointments as appointments_service
+from app.services import crm, human_inbox
 from app.services.gemini_client import GeminiClient
 from app.services.orchestrator import process_inbound_message
 
@@ -95,6 +98,21 @@ class ConversationOut(BaseModel):
     last_message_preview: str | None
 
 
+class TestReminderRequest(BaseModel):
+    tenant_slug: str = "grip"
+    phone: str
+    whatsapp_profile_name: str | None = None
+    therapist_name: str = "María Fernanda Ruiz"
+    hours_until_appointment: float = 20.0  # inside the "tomorrow" window appointments.appointments_needing_reminder uses
+
+
+class TestReminderResponse(BaseModel):
+    conversation_id: str
+    appointment_id: str
+    scheduled_at: str
+    reminder_text: str
+
+
 class ClaimRequest(BaseModel):
     agent_name: str
 
@@ -129,6 +147,40 @@ def send_patient_message(payload: SimulatorMessageRequest, db: Session = Depends
         reply_text=result.reply_text,
         intent=result.classification.primary_intent.value if result.classification else None,
         awaiting_human=result.awaiting_human,
+    )
+
+
+@router.post("/appointments/test-reminder", response_model=TestReminderResponse)
+def send_test_reminder(payload: TestReminderRequest, db: Session = Depends(get_db)) -> TestReminderResponse:
+    """"Probar recordatorio" button: creates a throwaway appointment for
+    this contact roughly a day out, then immediately sends the reminder
+    through the exact same app.services.appointments.send_reminder
+    function the real daily cron job (scripts/send_appointment_reminders)
+    calls — so this is a live test of the actual reminder pipeline
+    (including the forced-handoff guard if you reply with something like
+    "necesito cancelar"), not a mocked-up preview of it."""
+    tenant = _get_tenant(db, payload.tenant_slug)
+    contact = crm.get_or_create_contact(
+        db, tenant, payload.phone, whatsapp_profile_name=payload.whatsapp_profile_name
+    )
+    scheduled_at = datetime.now(timezone.utc) + timedelta(hours=payload.hours_until_appointment)
+    appointment = appointments_service.create_appointment(
+        db, tenant, contact, therapist_name=payload.therapist_name, scheduled_at=scheduled_at
+    )
+    reminder_text = appointments_service.send_reminder(db, tenant, appointment, contact)
+    db.commit()
+
+    conversation = (
+        db.query(Conversation)
+        .filter(Conversation.contact_id == contact.id)
+        .order_by(Conversation.started_at.desc())
+        .first()
+    )
+    return TestReminderResponse(
+        conversation_id=str(conversation.id),
+        appointment_id=str(appointment.id),
+        scheduled_at=appointment.scheduled_at.isoformat(),
+        reminder_text=reminder_text,
     )
 
 

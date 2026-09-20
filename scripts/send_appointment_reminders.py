@@ -18,17 +18,10 @@ import logging
 
 from app.core.db import SessionLocal
 from app.models.tenant import Tenant
-from app.services import appointments, crm
-from app.services.messaging import send_whatsapp_message
-from app.models.message import MessageSender
+from app.services import appointments
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-def _format_when(scheduled_at) -> str:
-    # Spanish, no year (it's always "tomorrow"): "a las 3:00 p. m."
-    return scheduled_at.strftime("a las %I:%M %p").lower().replace("am", "a. m.").replace("pm", "p. m.")
 
 
 def run() -> int:
@@ -40,18 +33,7 @@ def run() -> int:
             due = appointments.appointments_needing_reminder(db, tenant)
             for appointment in due:
                 contact = appointment.contact
-                name_suffix = f" {contact.name}" if contact.name else ""
-                body = appointments.APPOINTMENT_REMINDER_TEMPLATE.format(
-                    name_suffix=name_suffix,
-                    when=_format_when(appointment.scheduled_at),
-                    therapist=appointment.therapist_name,
-                )
-
-                conversation = crm.get_or_create_open_conversation(db, tenant, contact)
-                crm.record_outbound_message(db, conversation, body, sender=MessageSender.SYSTEM)
-                appointments.mark_reminder_sent(appointment)
-                send_whatsapp_message(contact.phone, body)
-
+                appointments.send_reminder(db, tenant, appointment, contact)
                 sent_count += 1
                 logger.info("Reminder sent: tenant=%s contact=%s appointment=%s", tenant.slug, contact.phone, appointment.id)
 
