@@ -9,6 +9,17 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.db import Base
 from app.models.base import TenantMixin, TimestampMixin, UUIDPKMixin
 
+# Imported (not just referenced by name below) so that ClinicalNote is
+# always registered on Base's mapper registry whenever Appointment is —
+# regardless of whether app.models.__init__ (or anything else in the
+# import graph) happens to import it too. Without this, the "ClinicalNote"
+# string in the relationship() below is a forward reference that only
+# resolves if something, somewhere, already imported that module first;
+# relying on that turned out to be exactly the kind of import-order
+# fragility that broke in production (mapper configuration failing with
+# "expression 'ClinicalNote' failed to locate a name").
+from app.models.clinical_note import ClinicalNote  # noqa: F401
+
 
 class AppointmentStatus(str, enum.Enum):
     """Lifecycle of a single scheduled appointment. Deliberately small and
