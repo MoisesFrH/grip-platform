@@ -86,7 +86,7 @@ _CONFIRM_KEYWORDS = [
 REMINDER_WINDOW_HOURS = 48  # how long after sending a reminder we still treat a reply as "about the reminder"
 
 APPOINTMENT_REMINDER_TEMPLATE = (
-    "Hola{name_suffix}, te recordamos tu cita mañana {when} con {therapist} en GRIP. "
+    "Hola{name_suffix}, te recordamos tu cita mañana {when} con {therapist} en el GRIP. "
     "Si necesitas cancelar o cambiar la cita, respóndenos aquí y te ayuda alguien de nuestro equipo. "
     "Si todo está bien, solo responde \"Sí\" para confirmar."
 )
