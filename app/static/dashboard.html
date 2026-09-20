@@ -10,26 +10,28 @@
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
 <style>
   :root {
-    /* Material Design 3 tokens, healthcare palette: teal/green primary,
-       terracotta reserved ONLY for critical alerts (never a general
-       "tech dark" accent). Adapted from the Stitch mockup's own token
-       set, kept as-is since the client (GRIP) liked this palette. */
-    --primary: #0f5238;
+    /* Material Design 3 tokens, blue/orange palette per the client's updated
+       Stitch mockup: deep indigo-blue primary (calm, "bot handling this"),
+       orange secondary/tertiary reserved for anything needing a human's
+       attention — escalations, alerts, pending review. Tertiary is a
+       deeper shade of the same orange, not a third hue, so "needs a human"
+       and "critical" stay visually related but distinguishable. */
+    --primary: #1d3375;
     --on-primary: #ffffff;
-    --primary-container: #2d6a4f;
-    --on-primary-container: #a8e7c5;
-    --primary-fixed: #b1f0ce;
-    --primary-fixed-dim: #95d4b3;
+    --primary-container: #2e4385;
+    --on-primary-container: #dce4ff;
+    --primary-fixed: #dce4ff;
+    --primary-fixed-dim: #b6c4ff;
 
-    --secondary: #31647a;
+    --secondary: #e87722;
     --on-secondary: #ffffff;
-    --secondary-container: #b1e4fd;
-    --secondary-fixed: #bde9ff;
+    --secondary-container: #ffb68b;
+    --secondary-fixed: #ffdbc8;
 
-    --tertiary: #83271a;
+    --tertiary: #c95e0e;
     --on-tertiary: #ffffff;
-    --tertiary-container: #a33e2f;
-    --tertiary-fixed: #ffdad4;
+    --tertiary-container: #e87722;
+    --tertiary-fixed: #ffe4cf;
 
     --error: #ba1a1a;
     --error-container: #ffdad6;
@@ -128,7 +130,7 @@
     background: var(--surface-container-lowest);
     font-size: 0.72rem;
     color: var(--on-surface-variant);
-    box-shadow: 0 1px 4px rgba(15, 82, 56, 0.06);
+    box-shadow: 0 1px 4px rgba(29, 51, 117, 0.08);
   }
   .badge-pill .dot {
     width: 6px; height: 6px; border-radius: 50%; background: var(--primary-fixed-dim);
@@ -181,7 +183,7 @@
     background: var(--surface-container-lowest);
     border-radius: 18px;
     padding: 18px;
-    box-shadow: 0 1px 3px rgba(15, 82, 56, 0.06);
+    box-shadow: 0 1px 3px rgba(29, 51, 117, 0.08);
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -225,17 +227,17 @@
   }
 
   .metric-card.primary .value { color: var(--primary); }
-  .metric-card.primary .metric-icon { background: rgba(177, 240, 206, 0.5); color: var(--primary); }
+  .metric-card.primary .metric-icon { background: rgba(220, 228, 255, 0.7); color: var(--primary); }
   .metric-card.secondary .value { color: var(--secondary); }
-  .metric-card.secondary .metric-icon { background: rgba(189, 233, 255, 0.5); color: var(--secondary); }
+  .metric-card.secondary .metric-icon { background: rgba(255, 219, 200, 0.6); color: var(--secondary); }
   .metric-card.tertiary .value { color: var(--tertiary); }
-  .metric-card.tertiary .metric-icon { background: rgba(255, 218, 212, 0.6); color: var(--tertiary); }
-  .metric-card.tertiary .footnote { background: rgba(255, 218, 212, 0.2); }
+  .metric-card.tertiary .metric-icon { background: rgba(255, 228, 207, 0.7); color: var(--tertiary); }
+  .metric-card.tertiary .footnote { background: rgba(255, 228, 207, 0.3); }
   .metric-card.tertiary::before {
     content: "";
     position: absolute; top: -24px; right: -24px;
     width: 90px; height: 90px; border-radius: 50%;
-    background: rgba(255, 218, 212, 0.35);
+    background: rgba(255, 228, 207, 0.45);
     filter: blur(6px);
   }
 
@@ -243,7 +245,7 @@
     background: var(--surface-container-lowest);
     border-radius: 18px;
     padding: 18px;
-    box-shadow: 0 1px 3px rgba(15, 82, 56, 0.06);
+    box-shadow: 0 1px 3px rgba(29, 51, 117, 0.08);
   }
   .panel-head {
     display: flex;
@@ -281,17 +283,44 @@
   .legend-chip .n { font-weight: 700; }
   .legend-chip .s { color: var(--on-surface-variant); font-size: 0.74rem; }
 
-  /* daily bar chart */
-  .bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 140px; padding-top: 10px; }
-  .bar-chart .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 6px; }
-  .bar-chart .bar { width: 100%; background: var(--primary-container); border-radius: 4px 4px 0 0; min-height: 2px; }
-  .bar-chart .bar-count { font-size: 0.62rem; color: var(--on-surface-variant); margin-bottom: 2px; }
-  .bar-chart .bar-label { font-size: 0.6rem; color: var(--on-surface-variant); margin-top: 4px; white-space: nowrap; }
+  /* daily bar chart — gridlines behind, rounded gradient bars, value shown
+     on hover instead of always-on, so it reads as one clean shape rather
+     than a row of flat rectangles */
+  .bar-chart-wrap { position: relative; padding-top: 4px; }
+  .bar-chart-grid {
+    position: absolute; top: 6px; left: 0; right: 0; bottom: 30px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    pointer-events: none;
+  }
+  .bar-chart-grid .gline { position: relative; border-top: 1px dashed var(--surface-container-highest); }
+  .bar-chart-grid .gline:last-child { border-top: 1px solid var(--surface-container-highest); }
+  .bar-chart-grid .gline span {
+    position: absolute; left: 0; top: -7px;
+    font-size: 0.6rem; color: var(--outline);
+    background: var(--surface-container-lowest); padding-right: 5px;
+  }
+
+  .bar-chart { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 10px; height: 160px; padding-top: 6px; }
+  .bar-chart .bar-col { flex: 1; max-width: 46px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 10px; cursor: pointer; }
+  .bar-chart .bar-count {
+    font-size: 0.68rem; font-weight: 700; color: var(--primary);
+    margin-bottom: 4px; opacity: 0; transform: translateY(2px);
+    transition: opacity 0.15s, transform 0.15s;
+  }
+  .bar-chart .bar-col:hover .bar-count { opacity: 1; transform: translateY(0); }
+  .bar-chart .bar-label { font-size: 0.64rem; color: var(--on-surface-variant); margin-top: 8px; white-space: nowrap; font-weight: 500; }
+  .bar-chart .bar-col:hover .bar-label { color: var(--on-surface); font-weight: 700; }
 
   /* stacked daily bar chart (bot-only vs escalated) */
-  .bar-chart .bar-stack { width: 100%; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; overflow: hidden; min-height: 2px; }
-  .bar-chart .bar-stack .seg-bot { background: var(--primary-container); width: 100%; }
-  .bar-chart .bar-stack .seg-escalated { background: var(--tertiary); width: 100%; }
+  .bar-chart .bar-stack {
+    width: 100%; display: flex; flex-direction: column-reverse;
+    border-radius: 8px 8px 3px 3px; overflow: hidden; min-height: 3px;
+    box-shadow: 0 2px 5px rgba(29, 51, 117, 0.15);
+    transition: transform 0.15s ease, filter 0.15s ease;
+  }
+  .bar-chart .bar-col:hover .bar-stack { transform: translateY(-3px); filter: brightness(1.06); }
+  .bar-chart .bar-stack .seg-bot { background: linear-gradient(180deg, var(--primary-container) 0%, var(--primary) 100%); width: 100%; }
+  .bar-chart .bar-stack .seg-escalated { background: linear-gradient(180deg, #ffb98a 0%, var(--tertiary-container) 100%); width: 100%; }
   .chart-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 0.76rem; color: var(--on-surface-variant); }
   .chart-legend .item { display: flex; align-items: center; gap: 6px; }
   .chart-legend .sw { width: 10px; height: 10px; border-radius: 3px; }
@@ -322,8 +351,8 @@
     display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px;
     font-size: 0.72rem; font-weight: 600;
   }
-  .status-tag.ok { background: rgba(177, 240, 206, 0.6); color: var(--primary); }
-  .status-tag.warn { background: rgba(255, 218, 212, 0.7); color: var(--tertiary); }
+  .status-tag.ok { background: rgba(220, 228, 255, 0.8); color: var(--primary); }
+  .status-tag.warn { background: rgba(255, 228, 207, 0.85); color: var(--tertiary); }
   .status-tag.pending { background: var(--surface-container-high); color: var(--on-surface-variant); }
   .table-scroll { overflow-x: auto; }
 
@@ -424,13 +453,15 @@ const STATUS_LABELS_ES = {
   CLOSED: "Cerrado",
 };
 
+// Blue family = bot handling it, orange family = a human is (or was) involved,
+// gray = closed — so the color alone hints at who's driving the conversation.
 const STATUS_COLORS = {
-  BOT_ACTIVE: "#2d6a4f",
-  WAITING_FOR_PATIENT: "#95d4b3",
-  WAITING_FOR_HUMAN: "#ffb4a7",
-  HUMAN_ACTIVE: "#31647a",
-  HUMAN_RESOLVED: "#bde9ff",
-  BOT_RESUMED: "#b1f0ce",
+  BOT_ACTIVE: "#1d3375",
+  WAITING_FOR_PATIENT: "#b6c4ff",
+  WAITING_FOR_HUMAN: "#e87722",
+  HUMAN_ACTIVE: "#c95e0e",
+  HUMAN_RESOLVED: "#ffdbc8",
+  BOT_RESUMED: "#7c8fc9",
   CLOSED: "#bfc9c1",
 };
 
@@ -534,11 +565,17 @@ function renderStackedBarChart(byDay) {
   if (byDay.length === 0) {
     return `<div class="empty-note">Sin conversaciones nuevas en este periodo.</div>`;
   }
-  const max = Math.max(...byDay.map((d) => d.bot_only + d.escalated), 1);
+  const rawMax = Math.max(...byDay.map((d) => d.bot_only + d.escalated), 1);
+  // Round the scale up to a "nice" number so the gridlines land on round
+  // values (0/25/50/75/100% of e.g. 8, not of an arbitrary total like 6).
+  const niceMax = Math.max(Math.ceil(rawMax / 4) * 4, 4);
+  const gridLines = [niceMax, Math.round(niceMax * 0.75), Math.round(niceMax * 0.5), Math.round(niceMax * 0.25), 0]
+    .map((v) => `<div class="gline"><span>${v}</span></div>`)
+    .join("");
   const cols = byDay
     .map((d) => {
       const total = d.bot_only + d.escalated;
-      const totalHeightPct = Math.max((total / max) * 100, total > 0 ? 6 : 0);
+      const totalHeightPct = Math.max((total / niceMax) * 100, total > 0 ? 4 : 0);
       const botPct = total > 0 ? (d.bot_only / total) * 100 : 0;
       const escPct = total > 0 ? (d.escalated / total) * 100 : 0;
       const label = new Date(d.date + "T00:00:00").toLocaleDateString("es-DO", { day: "2-digit", month: "2-digit" });
@@ -554,10 +591,13 @@ function renderStackedBarChart(byDay) {
     })
     .join("");
   return `
-    <div class="bar-chart">${cols}</div>
+    <div class="bar-chart-wrap">
+      <div class="bar-chart-grid">${gridLines}</div>
+      <div class="bar-chart">${cols}</div>
+    </div>
     <div class="chart-legend">
-      <span class="item"><span class="sw" style="background:var(--primary-container)"></span> Resuelta por el bot</span>
-      <span class="item"><span class="sw" style="background:var(--tertiary)"></span> Transferida a un humano</span>
+      <span class="item"><span class="sw" style="background:var(--primary)"></span> Resuelta por el bot</span>
+      <span class="item"><span class="sw" style="background:var(--tertiary-container)"></span> Transferida a un humano</span>
     </div>`;
 }
 
