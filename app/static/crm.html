@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GRIP — CRM interno</title>
+<link href="https://fonts.googleapis.com" rel="preconnect" />
+<link crossorigin href="https://fonts.gstatic.com" rel="preconnect" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  :root {
+    /* Same Material Design 3 tokens as /dashboard, so the internal CRM
+       reads as the same product rather than a bolted-on tool. */
+    --primary: #0f5238;
+    --on-primary: #ffffff;
+    --primary-container: #2d6a4f;
+    --on-primary-container: #a8e7c5;
+    --primary-fixed: #b1f0ce;
+
+    --secondary: #31647a;
+    --on-secondary: #ffffff;
+    --secondary-container: #b1e4fd;
+
+    --tertiary: #83271a;
+    --on-tertiary: #ffffff;
+    --tertiary-container: #a33e2f;
+    --tertiary-fixed: #ffdad4;
+
+    --error: #ba1a1a;
+    --error-container: #ffdad6;
+    --on-error-container: #93000a;
+
+    --background: #faf9f7;
+    --on-background: #1a1c1b;
+    --surface-container-lowest: #ffffff;
+    --surface-container-low: #f4f3f1;
+    --surface-container: #efeeec;
+    --surface-container-high: #e9e8e6;
+    --surface-container-highest: #e3e2e0;
+    --on-surface: #1a1c1b;
+    --on-surface-variant: #404943;
+    --outline: #707973;
+    --outline-variant: #bfc9c1;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--background);
+    color: var(--on-surface);
+    -webkit-font-smoothing: antialiased;
+  }
+  .material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+    font-size: 18px;
+    line-height: 1;
+    vertical-align: middle;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; }
+
+  /* ---------- header ---------- */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(250, 249, 247, 0.95);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--surface-container-highest);
+  }
+  .header-inner {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: var(--primary); color: var(--on-primary);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.95rem; letter-spacing: -0.02em; flex-shrink: 0;
+  }
+  .brand-text { display: flex; flex-direction: column; line-height: 1.2; }
+  .brand-text .name { font-weight: 700; font-size: 1rem; color: var(--primary); letter-spacing: -0.01em; }
+  .brand-text .sub { font-size: 0.72rem; color: var(--on-surface-variant); }
+
+  .staff-box { display: flex; align-items: center; gap: 12px; }
+  .staff-info { text-align: right; line-height: 1.25; }
+  .staff-info .staff-name { font-weight: 600; font-size: 0.86rem; }
+  .staff-info .staff-role {
+    font-size: 0.7rem; color: var(--on-surface-variant);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 20px; border: 1px solid var(--outline-variant);
+    background: var(--surface-container-lowest); color: var(--on-surface);
+    font-size: 0.82rem; font-weight: 600;
+  }
+  .btn:hover { background: var(--surface-container); }
+  .btn-primary { background: var(--primary); color: var(--on-primary); border: none; }
+  .btn-primary:hover { background: var(--primary-container); }
+  .btn-primary:disabled { opacity: 0.55; cursor: default; }
+  .btn-text { border: none; background: none; color: var(--secondary); font-weight: 600; font-size: 0.82rem; padding: 4px 8px; }
+
+  /* ---------- layout ---------- */
+  main { max-width: 1240px; margin: 0 auto; padding: 24px 20px 60px; }
+  .hidden { display: none !important; }
+
+  /* ---------- login ---------- */
+  .login-shell {
+    min-height: calc(100vh - 70px);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .login-card {
+    width: 100%; max-width: 380px;
+    background: var(--surface-container-lowest);
+    border: 1px solid var(--surface-container-highest);
+    border-radius: 20px; padding: 32px 28px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .login-card h1 { font-size: 1.15rem; margin: 0 0 4px; }
+  .login-card p.lead { font-size: 0.85rem; color: var(--on-surface-variant); margin: 0 0 22px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 0.78rem; font-weight: 600; margin-bottom: 5px; color: var(--on-surface-variant); }
+  .field input, .field select, .field textarea {
+    width: 100%; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--outline-variant); font-size: 0.9rem; background: #fff;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+  .error-msg {
+    background: var(--error-container); color: var(--on-error-container);
+    border-radius: 10px; padding: 10px 12px; font-size: 0.82rem; margin-bottom: 14px;
+  }
+
+  /* ---------- workspace ---------- */
+  .workspace { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .workspace { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--surface-container-lowest);
+    border: 1px solid var(--surface-container-highest);
+    border-radius: 16px;
+    padding: 18px;
+  }
+  .panel h2 { font-size: 0.95rem; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .panel-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .panel-header-row h2 { margin: 0; }
+
+  #patient-search { width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--outline-variant); font-size: 0.85rem; margin-bottom: 10px; }
+
+  .patient-list { display: flex; flex-direction: column; gap: 4px; max-height: 62vh; overflow-y: auto; }
+  .patient-row {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 10px 12px; border-radius: 10px; border: 1px solid transparent;
+    text-align: left; background: none; width: 100%;
+  }
+  .patient-row:hover { background: var(--surface-container-low); }
+  .patient-row.active { background: var(--primary-container); border-color: var(--primary); }
+  .patient-row.active .p-name, .patient-row.active .p-phone { color: var(--on-primary-container); }
+  .p-name { font-weight: 600; font-size: 0.88rem; }
+  .p-phone { font-size: 0.76rem; color: var(--on-surface-variant); }
+  .p-meta { font-size: 0.7rem; color: var(--on-surface-variant); margin-top: 2px; }
+
+  .empty-state { color: var(--on-surface-variant); font-size: 0.85rem; padding: 20px 4px; }
+
+  .detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .detail-header .name { font-size: 1.15rem; font-weight: 700; margin: 0; }
+  .detail-header .phone { font-size: 0.85rem; color: var(--on-surface-variant); }
+  .status-chip {
+    display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600;
+    background: var(--secondary-container); color: var(--secondary); white-space: nowrap;
+  }
+
+  .section { margin-top: 22px; }
+  .section h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--on-surface-variant); margin: 0 0 10px; }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+  table.data-table th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--on-surface-variant); padding: 6px 8px; border-bottom: 1px solid var(--surface-container-highest); }
+  table.data-table td { padding: 8px; border-bottom: 1px solid var(--surface-container-high); vertical-align: top; }
+  table.data-table tr:last-child td { border-bottom: none; }
+
+  .status-select { padding: 4px 6px; border-radius: 8px; border: 1px solid var(--outline-variant); font-size: 0.78rem; background: #fff; }
+
+  .note-card {
+    border: 1px solid var(--surface-container-highest); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 10px; background: var(--surface-container-low);
+  }
+  .note-card .note-meta { font-size: 0.72rem; color: var(--on-surface-variant); margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; }
+  .note-card .note-type-tag {
+    display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.66rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .note-type-tag.note { background: var(--secondary-container); color: var(--secondary); }
+  .note-type-tag.recommendation { background: var(--primary-fixed); color: var(--primary); }
+  .note-card .note-content { font-size: 0.86rem; white-space: pre-wrap; }
+
+  .locked-notice {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface-container-low); color: var(--on-surface-variant);
+    border-radius: 10px; padding: 12px; font-size: 0.82rem;
+  }
+
+  .inline-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 12px; }
+  .inline-form .field { margin-bottom: 0; flex: 1 1 160px; }
+  .inline-form textarea { min-height: 70px; resize: vertical; }
+  .inline-form.stacked { flex-direction: column; align-items: stretch; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--on-surface); color: #fff; padding: 10px 18px; border-radius: 20px;
+    font-size: 0.85rem; z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .toast.show { opacity: 1; }
+  .toast.error { background: var(--error); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-mark">G</div>
+      <div class="brand-text">
+        <span class="name">GRIP</span>
+        <span class="sub">CRM interno · citas y notas clínicas</span>
+      </div>
+    </div>
+    <div class="staff-box hidden" id="staff-box">
+      <div class="staff-info">
+        <div class="staff-name" id="staff-name">—</div>
+        <div class="staff-role" id="staff-role">—</div>
+      </div>
+      <button class="btn" id="logout-btn"><span class="material-symbols-outlined">logout</span>Salir</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===== LOGIN ===== -->
+  <div class="login-shell" id="login-view">
+    <div class="login-card">
+      <h1>Iniciar sesión</h1>
+      <p class="lead">Acceso exclusivo para personal de GRIP.</p>
+      <div class="error-msg hidden" id="login-error"></div>
+      <form id="login-form">
+        <div class="field">
+          <label for="login-username">Usuario</label>
+          <input id="login-username" type="text" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="login-password">Contraseña</label>
+          <input id="login-password" type="password" autocomplete="current-password" required />
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%; justify-content:center;" id="login-submit">
+          Entrar
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== WORKSPACE (post-login) ===== -->
+  <div class="workspace hidden" id="workspace-view">
+
+    <div class="panel">
+      <h2><span class="material-symbols-outlined">groups</span>Pacientes</h2>
+      <input id="patient-search" type="text" placeholder="Buscar por nombre o teléfono…" />
+      <div class="patient-list" id="patient-list"></div>
+    </div>
+
+    <div class="panel" id="detail-panel">
+      <div class="empty-state" id="detail-empty">Selecciona un paciente de la lista para ver su ficha.</div>
+      <div id="detail-content" class="hidden">
+
+        <div class="detail-header">
+          <div>
+            <p class="name" id="detail-name">—</p>
+            <span class="phone" id="detail-phone">—</span>
+          </div>
+          <span class="status-chip" id="detail-status">—</span>
+        </div>
+
+        <div class="section">
+          <div class="panel-header-row">
+            <h3 style="margin:0;">Citas</h3>
+          </div>
+          <table class="data-table" id="appointments-table">
+            <thead>
+              <tr><th>Fecha y hora</th><th>Terapeuta</th><th>Estado</th><th>Recordatorio</th></tr>
+            </thead>
+            <tbody id="appointments-tbody"></tbody>
+          </table>
+          <div class="empty-state hidden" id="appointments-empty" style="padding:10px 4px;">Sin citas registradas.</div>
+
+          <form class="inline-form" id="appointment-form">
+            <div class="field">
+              <label>Terapeuta</label>
+              <input type="text" id="apt-therapist" required placeholder="Nombre del terapeuta" />
+            </div>
+            <div class="field">
+              <label>Fecha y hora</label>
+              <input type="datetime-local" id="apt-datetime" required />
+            </div>
+            <button class="btn btn-primary" type="submit"><span class="material-symbols-outlined">event</span>Agendar</button>
+          </form>
+        </div>
+
+        <div class="section" id="notes-section">
+          <h3>Notas clínicas</h3>
+          <div id="notes-locked" class="locked-notice hidden">
+            <span class="material-symbols-outlined">lock</span>
+            Las notas clínicas solo son visibles para el personal médico.
+          </div>
+          <div id="notes-unlocked" class="hidden">
+            <div id="notes-list"></div>
+            <div class="empty-state hidden" id="notes-empty" style="padding:6px 4px;">Sin notas todavía.</div>
+
+            <form class="inline-form stacked" id="note-form">
+              <div class="field">
+                <label>Tipo</label>
+                <select id="note-type">
+                  <option value="NOTE">Nota</option>
+                  <option value="RECOMMENDATION">Recomendación</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Contenido</label>
+                <textarea id="note-content" required placeholder="Escribe la nota…"></textarea>
+              </div>
+              <button class="btn btn-primary" type="submit" style="align-self:flex-start;">
+                <span class="material-symbols-outlined">add_notes</span>Guardar nota
+              </button>
+            </form>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  const state = { staff: null, patients: [], selectedPatientId: null };
+
+  const $ = (id) => document.getElementById(id);
+
+  function showToast(message, isError) {
+    const el = $("toast");
+    el.textContent = message;
+    el.className = "toast show" + (isError ? " error" : "");
+    setTimeout(() => { el.className = "toast"; }, 3200);
+  }
+
+  async function api(path, options) {
+    const res = await fetch(path, Object.assign({ credentials: "include", headers: { "Content-Type": "application/json" } }, options || {}));
+    if (!res.ok) {
+      let detail = "Ocurrió un error.";
+      try { detail = (await res.json()).detail || detail; } catch (e) {}
+      const err = new Error(detail);
+      err.status = res.status;
+      throw err;
+    }
+    if (res.status === 204) return null;
+    return res.json();
+  }
+
+  const STATUS_LABELS = {
+    SCHEDULED: "Programada", CONFIRMED: "Confirmada", RESCHEDULE_REQUESTED: "Reprogramación solicitada",
+    CANCELLED: "Cancelada", COMPLETED: "Completada", NO_SHOW: "No asistió",
+  };
+  const REMINDER_LABELS = { CONFIRMED: "Confirmó", CANCEL_OR_RESCHEDULE: "Canceló/reprogramó" };
+  const CONTACT_STATUS_LABELS = {
+    NEW_CONTACT: "Nuevo contacto", ACTIVE: "Activo", AWAITING_HUMAN: "Esperando a un humano", CLOSED: "Cerrado",
+  };
+
+  // ---------- auth ----------
+
+  async function checkSession() {
+    try {
+      const me = await api("/crm/me");
+      state.staff = me;
+      enterWorkspace();
+    } catch (e) {
+      showLogin();
+    }
+  }
+
+  function showLogin() {
+    $("login-view").classList.remove("hidden");
+    $("workspace-view").classList.add("hidden");
+    $("staff-box").classList.add("hidden");
+  }
+
+  function enterWorkspace() {
+    $("login-view").classList.add("hidden");
+    $("workspace-view").classList.remove("hidden");
+    $("staff-box").classList.remove("hidden");
+    $("staff-name").textContent = state.staff.display_name;
+    $("staff-role").textContent = state.staff.role === "DOCTOR" ? "Doctor/a" : "Secretaría";
+    loadPatients();
+  }
+
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("login-error").classList.add("hidden");
+    $("login-submit").disabled = true;
+    try {
+      const staff = await api("/crm/login", {
+        method: "POST",
+        body: JSON.stringify({
+          tenant_slug: "grip",
+          username: $("login-username").value.trim(),
+          password: $("login-password").value,
+        }),
+      });
+      state.staff = staff;
+      $("login-password").value = "";
+      enterWorkspace();
+    } catch (err) {
+      $("login-error").textContent = err.message;
+      $("login-error").classList.remove("hidden");
+    } finally {
+      $("login-submit").disabled = false;
+    }
+  });
+
+  $("logout-btn").addEventListener("click", async () => {
+    try { await api("/crm/logout", { method: "POST" }); } catch (e) {}
+    state.staff = null;
+    state.selectedPatientId = null;
+    showLogin();
+  });
+
+  // ---------- patients ----------
+
+  async function loadPatients() {
+    try {
+      state.patients = await api("/crm/patients");
+      renderPatientList();
+    } catch (e) {
+      if (e.status === 401) { showLogin(); return; }
+      showToast("No se pudo cargar la lista de pacientes.", true);
+    }
+  }
+
+  function renderPatientList() {
+    const term = $("patient-search").value.trim().toLowerCase();
+    const list = $("patient-list");
+    list.innerHTML = "";
+    const filtered = state.patients.filter((p) => {
+      if (!term) return true;
+      return (p.name || "").toLowerCase().includes(term) || p.phone.toLowerCase().includes(term);
+    });
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="empty-state">No hay pacientes que coincidan.</div>';
+      return;
+    }
+    filtered.forEach((p) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "patient-row" + (p.id === state.selectedPatientId ? " active" : "");
+      row.innerHTML = `
+        <span class="p-name">${escapeHtml(p.name || "(sin nombre)")}</span>
+        <span class="p-phone">${escapeHtml(p.phone)}</span>
+        <span class="p-meta">${CONTACT_STATUS_LABELS[p.status] || p.status}</span>
+      `;
+      row.addEventListener("click", () => selectPatient(p.id));
+      list.appendChild(row);
+    });
+  }
+
+  $("patient-search").addEventListener("input", renderPatientList);
+
+  async function selectPatient(id) {
+    state.selectedPatientId = id;
+    renderPatientList();
+    $("detail-empty").classList.add("hidden");
+    $("detail-content").classList.remove("hidden");
+    try {
+      const detail = await api(`/crm/patients/${id}`);
+      renderPatientDetail(detail);
+    } catch (e) {
+      showToast("No se pudo cargar la ficha del paciente.", true);
+    }
+  }
+
+  function renderPatientDetail(detail) {
+    $("detail-name").textContent = detail.name || "(sin nombre)";
+    $("detail-phone").textContent = detail.phone;
+    $("detail-status").textContent = CONTACT_STATUS_LABELS[detail.status] || detail.status;
+
+    // appointments
+    const tbody = $("appointments-tbody");
+    tbody.innerHTML = "";
+    $("appointments-empty").classList.toggle("hidden", detail.appointments.length > 0);
+    detail.appointments.forEach((a) => {
+      const tr = document.createElement("tr");
+      const when = new Date(a.scheduled_at).toLocaleString("es-DO", { dateStyle: "medium", timeStyle: "short" });
+      const reminder = a.reminder_response ? (REMINDER_LABELS[a.reminder_response] || a.reminder_response)
+        : (a.reminder_sent_at ? "Enviado, sin respuesta" : "—");
+      tr.innerHTML = `
+        <td>${when}</td>
+        <td>${escapeHtml(a.therapist_name)}</td>
+        <td></td>
+        <td>${reminder}</td>
+      `;
+      const statusCell = tr.children[2];
+      const select = document.createElement("select");
+      select.className = "status-select";
+      Object.keys(STATUS_LABELS).forEach((key) => {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = STATUS_LABELS[key];
+        if (key === a.status) opt.selected = true;
+        select.appendChild(opt);
+      });
+      select.addEventListener("change", () => updateAppointmentStatus(a.id, select.value));
+      statusCell.appendChild(select);
+      tbody.appendChild(tr);
+    });
+
+    // notes
+    const isDoctor = state.staff.role === "DOCTOR";
+    $("notes-locked").classList.toggle("hidden", isDoctor);
+    $("notes-unlocked").classList.toggle("hidden", !isDoctor);
+    if (isDoctor) {
+      const notesList = $("notes-list");
+      notesList.innerHTML = "";
+      const notes = detail.notes || [];
+      $("notes-empty").classList.toggle("hidden", notes.length > 0);
+      notes.forEach((n) => {
+        const card = document.createElement("div");
+        card.className = "note-card";
+        const when = new Date(n.created_at).toLocaleString("es-DO", { dateStyle: "medium", timeStyle: "short" });
+        const tagClass = n.note_type === "RECOMMENDATION" ? "recommendation" : "note";
+        const tagLabel = n.note_type === "RECOMMENDATION" ? "Recomendación" : "Nota";
+        card.innerHTML = `
+          <div class="note-meta">
+            <span><span class="note-type-tag ${tagClass}">${tagLabel}</span> · ${escapeHtml(n.author_name)}</span>
+            <span>${when}</span>
+          </div>
+          <div class="note-content">${escapeHtml(n.content)}</div>
+        `;
+        notesList.appendChild(card);
+      });
+    }
+  }
+
+  async function updateAppointmentStatus(appointmentId, status) {
+    try {
+      await api(`/crm/appointments/${appointmentId}`, { method: "PATCH", body: JSON.stringify({ status }) });
+      showToast("Estado de la cita actualizado.");
+      if (state.selectedPatientId) selectPatient(state.selectedPatientId);
+    } catch (e) {
+      showToast(e.message || "No se pudo actualizar la cita.", true);
+    }
+  }
+
+  $("appointment-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.selectedPatientId) return;
+    const therapist = $("apt-therapist").value.trim();
+    const when = $("apt-datetime").value;
+    if (!therapist || !when) return;
+    try {
+      await api(`/crm/patients/${state.selectedPatientId}/appointments`, {
+        method: "POST",
+        body: JSON.stringify({ therapist_name: therapist, scheduled_at: new Date(when).toISOString() }),
+      });
+      $("apt-therapist").value = "";
+      $("apt-datetime").value = "";
+      showToast("Cita agendada.");
+      selectPatient(state.selectedPatientId);
+    } catch (err) {
+      showToast(err.message || "No se pudo agendar la cita.", true);
+    }
+  });
+
+  $("note-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.selectedPatientId) return;
+    const content = $("note-content").value.trim();
+    if (!content) return;
+    try {
+      await api(`/crm/patients/${state.selectedPatientId}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ note_type: $("note-type").value, content }),
+      });
+      $("note-content").value = "";
+      showToast("Nota guardada.");
+      selectPatient(state.selectedPatientId);
+    } catch (err) {
+      showToast(err.message || "No se pudo guardar la nota.", true);
+    }
+  });
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[c]));
+  }
+
+  checkSession();
+})();
+</script>
+
+</body>
+</html>

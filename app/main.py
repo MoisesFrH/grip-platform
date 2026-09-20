@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.api.routes.crm import router as crm_router
 from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.dev_chat import router as dev_chat_router
 from app.api.routes.simulator import router as simulator_router
@@ -15,6 +16,7 @@ app = FastAPI(title="GRIP / ATR Conversational Platform", version="0.1.0")
 
 _SIMULATOR_UI_PATH = Path(__file__).parent / "static" / "simulator.html"
 _DASHBOARD_UI_PATH = Path(__file__).parent / "static" / "dashboard.html"
+_CRM_UI_PATH = Path(__file__).parent / "static" / "crm.html"
 
 if get_settings().app_env != "production":
     app.include_router(dev_chat_router)
@@ -32,10 +34,20 @@ if get_settings().app_env != "production":
 # not something to bolt on silently here.
 app.include_router(dashboard_router)
 
+# /crm is the real internal tool with login + roles (see app/api/routes/crm.py) —
+# unlike /dashboard it requires authentication on every API call, so it's
+# safe to expose the HTML shell in every environment.
+app.include_router(crm_router)
+
 
 @app.get("/dashboard")
 def dashboard_ui() -> FileResponse:
     return FileResponse(_DASHBOARD_UI_PATH)
+
+
+@app.get("/crm")
+def crm_ui() -> FileResponse:
+    return FileResponse(_CRM_UI_PATH)
 
 
 @app.get("/health")
