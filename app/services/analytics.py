@@ -16,6 +16,8 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.models.appointment import Appointment
+from app.models.contact import Contact
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageDirection
 from app.models.tenant import Tenant
@@ -63,6 +65,107 @@ def conversation_volume(db: Session, tenant: Tenant, days: int = 30) -> dict:
         "total_new": sum(count for _, count in by_day),
         "by_status": {status.value: count for status, count in by_status},
     }
+
+
+def conversation_volume_by_outcome(db: Session, tenant: Tenant, days: int = 30) -> list[dict]:
+    """Same "new conversations per day" as conversation_volume, but split
+    by whether each conversation was ever escalated to a human
+    (handoff_reason gets set exactly once, the first time it escalates —
+    see orchestrator._handoff) versus handled by the bot start to finish.
+    Meant for a stacked bar chart: bot-only vs. escalated, per day."""
+    since = _since(days)
+    day_expr = func.date_trunc("day", Conversation.started_at)
+    escalated_expr = Conversation.handoff_reason.isnot(None)
+
+    rows = (
+        db.query(day_expr.label("day"), escalated_expr.label("escalated"), func.count(Conversation.id))
+        .filter(Conversation.tenant_id == tenant.id, Conversation.started_at >= since)
+        .group_by(day_expr, escalated_expr)
+        .order_by(day_expr)
+        .all()
+    )
+
+    by_day: dict[str, dict] = {}
+    for day, escalated, count in rows:
+        key = day.date().isoformat()
+        entry = by_day.setdefault(key, {"date": key, "bot_only": 0, "escalated": 0})
+        entry["escalated" if escalated else "bot_only"] += count
+
+    return [by_day[key] for key in sorted(by_day)]
+
+
+def appointments_overview(db: Session, tenant: Tenant, days: int = 30) -> dict:
+    """Counts appointments SCHEDULED within the window (not by created_at —
+    what matters here is when the appointment itself falls, not when the
+    row was inserted), broken down by status and by how the patient
+    responded to their reminder, if any."""
+    since = _since(days)
+    until = datetime.now(timezone.utc) + timedelta(days=days)
+
+    by_status = (
+        db.query(Appointment.status, func.count(Appointment.id))
+        .filter(
+            Appointment.tenant_id == tenant.id,
+            Appointment.scheduled_at >= since,
+            Appointment.scheduled_at <= until,
+        )
+        .group_by(Appointment.status)
+        .all()
+    )
+
+    reminder_rows = (
+        db.query(Appointment.reminder_response, func.count(Appointment.id))
+        .filter(
+            Appointment.tenant_id == tenant.id,
+            Appointment.reminder_sent_at.isnot(None),
+            Appointment.reminder_sent_at >= since,
+        )
+        .group_by(Appointment.reminder_response)
+        .all()
+    )
+    by_reminder_response = {"NO_RESPONSE": 0, "CONFIRMED": 0, "CANCEL_OR_RESCHEDULE": 0}
+    reminders_sent = 0
+    for response, count in reminder_rows:
+        reminders_sent += count
+        by_reminder_response[response.value if response else "NO_RESPONSE"] = count
+
+    return {
+        "by_status": {status.value: count for status, count in by_status},
+        "reminders_sent": reminders_sent,
+        "by_reminder_response": by_reminder_response,
+    }
+
+
+def reminder_log(db: Session, tenant: Tenant, days: int = 30, limit: int = 50) -> list[dict]:
+    """Recent reminders sent, most recent first — "who got a reminder and
+    what happened next." Contact phone is included since that's how staff
+    identify a WhatsApp patient day-to-day; no message content, no
+    clinical data."""
+    since = _since(days)
+    rows = (
+        db.query(Appointment, Contact)
+        .join(Contact, Appointment.contact_id == Contact.id)
+        .filter(
+            Appointment.tenant_id == tenant.id,
+            Appointment.reminder_sent_at.isnot(None),
+            Appointment.reminder_sent_at >= since,
+        )
+        .order_by(Appointment.reminder_sent_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "contact_name": contact.name or contact.whatsapp_profile_name,
+            "contact_phone": contact.phone,
+            "therapist_name": appointment.therapist_name,
+            "scheduled_at": appointment.scheduled_at.isoformat(),
+            "reminder_sent_at": appointment.reminder_sent_at.isoformat(),
+            "status": appointment.status.value,
+            "reminder_response": appointment.reminder_response.value if appointment.reminder_response else None,
+        }
+        for appointment, contact in rows
+    ]
 
 
 def handoff_rate(db: Session, tenant: Tenant, days: int = 30) -> dict:
@@ -169,7 +272,9 @@ def dashboard_summary(db: Session, tenant: Tenant, days: int = 30) -> dict:
         "tenant": tenant.slug,
         "period_days": days,
         "conversations": conversation_volume(db, tenant, days),
+        "conversations_by_outcome": conversation_volume_by_outcome(db, tenant, days),
         "handoff": handoff_rate(db, tenant, days),
         "top_intents": top_intents(db, tenant, days),
         "safety": safety_alerts(db, tenant, days),
+        "appointments": appointments_overview(db, tenant, days),
     }

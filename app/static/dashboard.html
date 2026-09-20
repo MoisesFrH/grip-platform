@@ -288,6 +288,31 @@
   .bar-chart .bar-count { font-size: 0.62rem; color: var(--on-surface-variant); margin-bottom: 2px; }
   .bar-chart .bar-label { font-size: 0.6rem; color: var(--on-surface-variant); margin-top: 4px; white-space: nowrap; }
 
+  /* stacked daily bar chart (bot-only vs escalated) */
+  .bar-chart .bar-stack { width: 100%; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; overflow: hidden; min-height: 2px; }
+  .bar-chart .bar-stack .seg-bot { background: var(--primary-container); width: 100%; }
+  .bar-chart .bar-stack .seg-escalated { background: var(--tertiary); width: 100%; }
+  .chart-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 0.76rem; color: var(--on-surface-variant); }
+  .chart-legend .item { display: flex; align-items: center; gap: 6px; }
+  .chart-legend .sw { width: 10px; height: 10px; border-radius: 3px; }
+
+  /* reminder log table */
+  .reminder-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .reminder-table th {
+    text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--on-surface-variant); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--surface-container-highest);
+  }
+  .reminder-table td { padding: 8px 10px; border-bottom: 1px solid var(--surface-container-low); vertical-align: middle; }
+  .reminder-table tr:last-child td { border-bottom: none; }
+  .status-tag {
+    display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px;
+    font-size: 0.72rem; font-weight: 600;
+  }
+  .status-tag.ok { background: rgba(177, 240, 206, 0.6); color: var(--primary); }
+  .status-tag.warn { background: rgba(255, 218, 212, 0.7); color: var(--tertiary); }
+  .status-tag.pending { background: var(--surface-container-high); color: var(--on-surface-variant); }
+  .table-scroll { overflow-x: auto; }
+
   .hbar-row { display: grid; grid-template-columns: 150px 1fr 40px; align-items: center; gap: 10px; font-size: 0.82rem; margin-bottom: 8px; }
   .hbar-row .name { color: var(--on-surface); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .hbar-track { background: var(--surface-container); border-radius: 999px; height: 12px; overflow: hidden; }
@@ -413,6 +438,21 @@ const SAFETY_CATEGORY_LABELS_ES = {
   CLINICAL_OTHER: "Otro tema clínico",
 };
 
+const APPOINTMENT_STATUS_LABELS_ES = {
+  SCHEDULED: "Agendada",
+  CONFIRMED: "Confirmada",
+  RESCHEDULE_REQUESTED: "Pidió cambio/cancelar",
+  CANCELLED: "Cancelada",
+  COMPLETED: "Completada",
+  NO_SHOW: "No se presentó",
+};
+
+const REMINDER_RESPONSE_LABELS_ES = {
+  CONFIRMED: "Confirmó",
+  CANCEL_OR_RESCHEDULE: "Canceló / pidió cambio",
+  NO_RESPONSE: "Sin respuesta",
+};
+
 function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text == null ? "" : String(text);
@@ -425,24 +465,72 @@ async function fetchSummary(days) {
   return res.json();
 }
 
-function renderBarChart(byDay) {
+async function fetchReminders(days) {
+  const res = await fetch(`/dashboard/api/reminders?tenant_slug=${TENANT_SLUG}&days=${days}&limit=50`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+function renderStackedBarChart(byDay) {
   if (byDay.length === 0) {
     return `<div class="empty-note">Sin conversaciones nuevas en este periodo.</div>`;
   }
-  const max = Math.max(...byDay.map((d) => d.count), 1);
+  const max = Math.max(...byDay.map((d) => d.bot_only + d.escalated), 1);
   const cols = byDay
     .map((d) => {
-      const heightPct = Math.max((d.count / max) * 100, d.count > 0 ? 6 : 0);
+      const total = d.bot_only + d.escalated;
+      const totalHeightPct = Math.max((total / max) * 100, total > 0 ? 6 : 0);
+      const botPct = total > 0 ? (d.bot_only / total) * 100 : 0;
+      const escPct = total > 0 ? (d.escalated / total) * 100 : 0;
       const label = new Date(d.date + "T00:00:00").toLocaleDateString("es-DO", { day: "2-digit", month: "2-digit" });
       return `
-        <div class="bar-col" title="${label}: ${d.count}">
-          <div class="bar-count">${d.count > 0 ? d.count : ""}</div>
-          <div class="bar" style="height:${heightPct}%"></div>
+        <div class="bar-col" title="${label}: ${total} (bot: ${d.bot_only}, humano: ${d.escalated})">
+          <div class="bar-count">${total > 0 ? total : ""}</div>
+          <div class="bar-stack" style="height:${totalHeightPct}%">
+            <div class="seg-bot" style="height:${botPct}%"></div>
+            <div class="seg-escalated" style="height:${escPct}%"></div>
+          </div>
           <div class="bar-label">${label}</div>
         </div>`;
     })
     .join("");
-  return `<div class="bar-chart">${cols}</div>`;
+  return `
+    <div class="bar-chart">${cols}</div>
+    <div class="chart-legend">
+      <span class="item"><span class="sw" style="background:var(--primary-container)"></span> Resuelta por el bot</span>
+      <span class="item"><span class="sw" style="background:var(--tertiary)"></span> Transferida a un humano</span>
+    </div>`;
+}
+
+function renderRemindersTable(reminders) {
+  if (reminders.length === 0) {
+    return `<div class="empty-note">No se han enviado recordatorios en este periodo.</div>`;
+  }
+  const fmt = (iso) => new Date(iso).toLocaleString("es-DO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const rows = reminders
+    .map((r) => {
+      let tagClass = "pending";
+      let tagLabel = REMINDER_RESPONSE_LABELS_ES.NO_RESPONSE;
+      if (r.reminder_response === "CONFIRMED") { tagClass = "ok"; tagLabel = REMINDER_RESPONSE_LABELS_ES.CONFIRMED; }
+      else if (r.reminder_response === "CANCEL_OR_RESCHEDULE") { tagClass = "warn"; tagLabel = REMINDER_RESPONSE_LABELS_ES.CANCEL_OR_RESCHEDULE; }
+      return `
+        <tr>
+          <td>${escapeHtml(r.contact_name || r.contact_phone)}</td>
+          <td>${escapeHtml(r.therapist_name)}</td>
+          <td>${fmt(r.scheduled_at)}</td>
+          <td>${fmt(r.reminder_sent_at)}</td>
+          <td><span class="status-tag ${tagClass}">${tagLabel}</span></td>
+          <td>${APPOINTMENT_STATUS_LABELS_ES[r.status] || r.status}</td>
+        </tr>`;
+    })
+    .join("");
+  return `
+    <div class="table-scroll">
+      <table class="reminder-table">
+        <thead><tr><th>Paciente</th><th>Terapeuta</th><th>Cita</th><th>Recordatorio enviado</th><th>Respuesta</th><th>Estado</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 function renderHBars(rows, labelMap, opts) {
@@ -495,13 +583,14 @@ function renderStatusBreakdown(byStatus, totalActive) {
   return `<div class="segbar">${segs}</div><div class="legend">${chips}</div>`;
 }
 
-function render(data) {
+function render(data, reminders) {
   const main = document.getElementById("main-content");
 
   const conv = data.conversations;
   const handoff = data.handoff;
   const intents = data.top_intents;
   const safety = data.safety;
+  const appointments = data.appointments;
 
   const intentRows = intents.map((i) => ({ key: i.intent, count: i.count }));
   const handoffPriorityRows = Object.entries(handoff.by_priority)
@@ -511,6 +600,12 @@ function render(data) {
     .filter(([, v]) => v > 0)
     .map(([k, v]) => ({ key: k, count: v }));
   const safetyCategoryRows = Object.entries(safety.by_category).map(([k, v]) => ({ key: k, count: v }));
+  const appointmentStatusRows = Object.entries(appointments.by_status)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => ({ key: k, count: v }));
+  const reminderResponseRows = Object.entries(appointments.by_reminder_response)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => ({ key: k, count: v }));
 
   const totalActive = Object.values(conv.by_status).reduce((a, b) => a + b, 0);
 
@@ -566,8 +661,9 @@ function render(data) {
       <div class="panel-head">
         <span class="material-symbols-outlined">show_chart</span>
         <h2>Conversaciones nuevas por día</h2>
+        <span class="count">bot vs. transferidas a un humano</span>
       </div>
-      ${renderBarChart(conv.new_per_day)}
+      ${renderStackedBarChart(data.conversations_by_outcome)}
     </div>
 
     <div class="two-col">
@@ -604,6 +700,35 @@ function render(data) {
         </div>
       </div>
     </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="material-symbols-outlined">event_available</span>
+          <h2>Citas por estado</h2>
+          <span class="count">agendadas en este periodo</span>
+        </div>
+        ${renderHBars(appointmentStatusRows, APPOINTMENT_STATUS_LABELS_ES)}
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <span class="material-symbols-outlined">mark_chat_read</span>
+          <h2>Respuestas a recordatorios</h2>
+          <span class="count">${appointments.reminders_sent} enviados</span>
+        </div>
+        ${renderHBars(reminderResponseRows, REMINDER_RESPONSE_LABELS_ES)}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <span class="material-symbols-outlined">notifications_active</span>
+        <h2>Registro de recordatorios enviados</h2>
+        <span class="count">últimos ${reminders.length}</span>
+      </div>
+      ${renderRemindersTable(reminders)}
+    </div>
   `;
 }
 
@@ -612,8 +737,8 @@ async function loadAndRender() {
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="loading">Cargando métricas…</div>`;
   try {
-    const data = await fetchSummary(days);
-    render(data);
+    const [data, remindersResp] = await Promise.all([fetchSummary(days), fetchReminders(days)]);
+    render(data, remindersResp.reminders);
   } catch (e) {
     main.innerHTML = `<div class="empty-note">No se pudieron cargar las métricas: ${escapeHtml(e.message)}</div>`;
   }
