@@ -267,9 +267,24 @@
     .two-col { grid-template-columns: 1fr; }
   }
 
-  /* segmented status bar */
-  .segbar { width: 100%; height: 12px; border-radius: 999px; overflow: hidden; display: flex; background: var(--surface-container); }
-  .segbar .seg { height: 100%; }
+  /* segmented status bar — same glossy/rounded language as the daily bar
+     chart: a soft gradient sheen on each segment, a bit taller, and a
+     hover lift so it doesn't read as a flat row of paint chips */
+  .segbar {
+    width: 100%; height: 16px; border-radius: 999px; overflow: hidden;
+    display: flex; background: var(--surface-container);
+    box-shadow: inset 0 1px 2px rgba(29, 51, 117, 0.08);
+  }
+  .segbar .seg {
+    height: 100%; position: relative; cursor: pointer;
+    transition: filter 0.15s ease, transform 0.15s ease;
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 45%, rgba(0,0,0,0.06) 100%);
+    background-blend-mode: overlay;
+  }
+  .segbar .seg:hover { filter: brightness(1.08); transform: scaleY(1.12); z-index: 2; }
+  .segbar .seg:first-child { border-radius: 999px 0 0 999px; }
+  .segbar .seg:last-child { border-radius: 0 999px 999px 0; }
+
   .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .legend-chip {
     display: flex; align-items: center; gap: 8px;
@@ -278,8 +293,10 @@
     background: var(--surface-container-low);
     font-size: 0.8rem;
     flex: 1 1 150px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
-  .legend-chip .sw { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-chip:hover { transform: translateY(-1px); box-shadow: 0 2px 6px rgba(29, 51, 117, 0.12); }
+  .legend-chip .sw { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 3px rgba(29, 51, 117, 0.06); }
   .legend-chip .n { font-weight: 700; }
   .legend-chip .s { color: var(--on-surface-variant); font-size: 0.74rem; }
 
@@ -334,9 +351,31 @@
   .mini-stat .l { font-size: 0.74rem; color: var(--on-surface-variant); margin-top: 2px; }
 
   /* small vertical bar chart for hour/weekday volume, no counts/labels per bar */
-  .mini-bar-chart { display: flex; align-items: flex-end; gap: 3px; height: 70px; }
-  .mini-bar-chart .mbc-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; min-width: 4px; }
-  .mini-bar-chart .mbc-bar { width: 100%; background: var(--secondary); border-radius: 2px 2px 0 0; min-height: 2px; }
+  /* mini bar chart (hour/weekday volume) — same gridline + gradient +
+     hover-reveal language as the main daily chart, just more compact */
+  .mini-bar-chart-wrap { position: relative; }
+  .mini-bar-chart-grid {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    display: flex; flex-direction: column; justify-content: space-between;
+    pointer-events: none;
+  }
+  .mini-bar-chart-grid .gline { border-top: 1px dashed var(--surface-container-highest); }
+  .mini-bar-chart-grid .gline:last-child { border-top: 1px solid var(--surface-container-highest); }
+
+  .mini-bar-chart { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 3px; height: 70px; }
+  .mini-bar-chart .mbc-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 4px; cursor: pointer; }
+  .mini-bar-chart .mbc-value {
+    font-size: 0.58rem; font-weight: 700; color: var(--secondary);
+    margin-bottom: 2px; opacity: 0; transition: opacity 0.15s;
+  }
+  .mini-bar-chart .mbc-col:hover .mbc-value { opacity: 1; }
+  .mini-bar-chart .mbc-bar {
+    width: 100%; border-radius: 3px 3px 1px 1px; min-height: 2px;
+    background: linear-gradient(180deg, #ffb98a 0%, var(--secondary) 100%);
+    box-shadow: 0 1px 3px rgba(232, 119, 34, 0.25);
+    transition: transform 0.15s ease, filter 0.15s ease;
+  }
+  .mini-bar-chart .mbc-col:hover .mbc-bar { transform: translateY(-2px); filter: brightness(1.06); }
   .mini-bar-chart-labels { display: flex; gap: 3px; margin-top: 4px; }
   .mini-bar-chart-labels span { flex: 1; text-align: center; font-size: 0.58rem; color: var(--on-surface-variant); min-width: 4px; }
 
@@ -356,12 +395,24 @@
   .status-tag.pending { background: var(--surface-container-high); color: var(--on-surface-variant); }
   .table-scroll { overflow-x: auto; }
 
-  .hbar-row { display: grid; grid-template-columns: 150px 1fr 40px; align-items: center; gap: 10px; font-size: 0.82rem; margin-bottom: 8px; }
+  .hbar-row {
+    display: grid; grid-template-columns: 150px 1fr 40px; align-items: center; gap: 10px;
+    font-size: 0.82rem; margin-bottom: 8px; padding: 3px 4px; border-radius: 10px;
+    transition: background 0.15s ease;
+  }
+  .hbar-row:hover { background: var(--surface-container-low); }
   .hbar-row .name { color: var(--on-surface); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .hbar-track { background: var(--surface-container); border-radius: 999px; height: 12px; overflow: hidden; }
-  .hbar-fill { height: 100%; background: var(--primary-container); border-radius: 999px; }
-  .hbar-fill.tertiary { background: var(--tertiary); }
+  .hbar-track { background: var(--surface-container); border-radius: 999px; height: 12px; overflow: hidden; box-shadow: inset 0 1px 2px rgba(29, 51, 117, 0.08); }
+  .hbar-fill {
+    height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--primary-container) 0%, var(--primary) 100%);
+    box-shadow: 0 1px 3px rgba(29, 51, 117, 0.2);
+    transition: filter 0.15s ease, width 0.3s ease;
+  }
+  .hbar-fill.tertiary { background: linear-gradient(90deg, var(--tertiary-container) 0%, var(--tertiary) 100%); box-shadow: 0 1px 3px rgba(201, 94, 14, 0.25); }
+  .hbar-row:hover .hbar-fill { filter: brightness(1.08); }
   .hbar-row .count { text-align: right; color: var(--on-surface-variant); font-size: 0.78rem; }
+  .hbar-row:hover .count { color: var(--on-surface); font-weight: 700; }
 
   .empty-note { color: var(--on-surface-variant); font-size: 0.85rem; padding: 10px 0; }
   .loading { text-align: center; color: var(--on-surface-variant); padding: 60px 20px; }
@@ -526,12 +577,26 @@ const WEEKDAY_LABELS_ES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]; /
 const HOUR_LABELS = Array.from({ length: 24 }, (_, h) => (h % 3 === 0 ? String(h) : ""));
 
 function renderMiniBarChart(values, labels) {
-  const max = Math.max(...values, 1);
+  const rawMax = Math.max(...values, 1);
+  const niceMax = Math.max(Math.ceil(rawMax / 4) * 4, 4);
+  const gridLines = [0, 1, 2].map(() => `<div class="gline"></div>`).join(""); // just visual rhythm, no labels (chart is too compact for them)
   const bars = values
-    .map((v, i) => `<div class="mbc-col" title="${labels[i] || i}: ${v}"><div class="mbc-bar" style="height:${Math.max((v / max) * 100, v > 0 ? 6 : 0)}%"></div></div>`)
+    .map((v, i) => {
+      const label = labels[i] || i;
+      return `
+        <div class="mbc-col" title="${label}: ${v}">
+          <div class="mbc-value">${v > 0 ? v : ""}</div>
+          <div class="mbc-bar" style="height:${Math.max((v / niceMax) * 100, v > 0 ? 6 : 0)}%"></div>
+        </div>`;
+    })
     .join("");
   const labelRow = labels.map((l) => `<span>${l}</span>`).join("");
-  return `<div class="mini-bar-chart">${bars}</div><div class="mini-bar-chart-labels">${labelRow}</div>`;
+  return `
+    <div class="mini-bar-chart-wrap">
+      <div class="mini-bar-chart-grid">${gridLines}</div>
+      <div class="mini-bar-chart">${bars}</div>
+    </div>
+    <div class="mini-bar-chart-labels">${labelRow}</div>`;
 }
 
 function renderPatientsTable(patients) {
