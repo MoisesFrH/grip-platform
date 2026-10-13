@@ -18,6 +18,7 @@ _SIMULATOR_UI_PATH = Path(__file__).parent / "static" / "simulator.html"
 _DASHBOARD_UI_PATH = Path(__file__).parent / "static" / "dashboard.html"
 _CRM_UI_PATH = Path(__file__).parent / "static" / "crm.html"
 _BOOTSTRAP_STAFF_UI_PATH = Path(__file__).parent / "static" / "bootstrap_staff.html"
+_GLASS_CSS_PATH = Path(__file__).parent / "static" / "glass.css"
 
 if get_settings().app_env != "production":
     app.include_router(dev_chat_router)
@@ -58,6 +59,14 @@ def crm_ui() -> FileResponse:
 @app.get("/crm/bootstrap")
 def crm_bootstrap_ui() -> FileResponse:
     return FileResponse(_BOOTSTRAP_STAFF_UI_PATH)
+
+
+# Shared "liquid glass" theme for /crm, /dashboard and /simulator. Plain CSS,
+# no data in it, so it is served in every environment (the simulator page
+# itself is dev-only, but /crm and /dashboard are not).
+@app.get("/assets/glass.css")
+def glass_css() -> FileResponse:
+    return FileResponse(_GLASS_CSS_PATH, media_type="text/css")
 
 
 @app.get("/health")

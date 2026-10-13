@@ -1,0 +1,294 @@
+/*
+ * Liquid-glass theme shared by /crm, /dashboard and /simulator.
+ *
+ * Loaded AFTER each page's own <style> block, so everything here wins on
+ * equal specificity. The pages keep their layout and class names; this file
+ * only changes how surfaces look:
+ *
+ *   - a soft indigo/orange "aurora" fixed behind the whole page (the brand
+ *     colours, blurred) — it is what the glass has something to refract;
+ *   - translucent, blurred surfaces with a bright top edge (specular
+ *     highlight) and a faint coloured shadow, instead of flat white cards;
+ *   - the Material tokens the pages already use (--surface-container-*,
+ *     --outline-variant) are re-pointed at translucent values, so tables,
+ *     hovers, notes and chips pick up the glass look without per-class edits.
+ *
+ * Orange keeps its meaning from the dashboard: it is reserved for anything
+ * that needs a human. Glass is calm; urgency stays loud.
+ *
+ * Text-heavy panels use a high fill (>= .56 white) on purpose: contrast on
+ * the staff screens matters more than showing off the blur.
+ */
+
+:root {
+  --glass-fill: rgba(255, 255, 255, 0.44);
+  --glass-fill-strong: rgba(255, 255, 255, 0.76);
+  --glass-fill-soft: rgba(255, 255, 255, 0.38);
+  --glass-edge: rgba(255, 255, 255, 0.8);
+  --glass-ink-line: rgba(29, 51, 117, 0.12);
+  --glass-blur: blur(22px) saturate(165%);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 45%);
+  --glass-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -1px 0 rgba(29, 51, 117, 0.05) inset,
+    0 14px 32px -12px rgba(29, 51, 117, 0.28),
+    0 2px 6px rgba(29, 51, 117, 0.06);
+  --glass-radius: 22px;
+
+  /* The simulator page has no Material tokens of its own; these are the same
+     values /crm and /dashboard already use, so defining them here is a no-op
+     there and fixes the simulator's header/toggle colours. */
+  --primary: #1d3375;
+  --primary-container: #2e4385;
+  --on-surface: #1a1c1b;
+  --on-surface-variant: #404943;
+
+  /* Re-point the Material surface tokens at translucent values. */
+  --surface-container-lowest: rgba(255, 255, 255, 0.62);
+  --surface-container-low: rgba(255, 255, 255, 0.42);
+  --surface-container: rgba(255, 255, 255, 0.5);
+  --surface-container-high: rgba(29, 51, 117, 0.07);
+  --surface-container-highest: rgba(29, 51, 117, 0.12);
+  --outline-variant: rgba(29, 51, 117, 0.2);
+}
+
+/* ---------- aurora background ---------- */
+html { background: #eef1fc; }
+body {
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: linear-gradient(160deg, #e4e9fb 0%, #f4eeee 55%, #fbe6d2 100%) fixed;
+  min-height: 100vh;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(44vmax 44vmax at 6% 4%, rgba(46, 67, 133, 0.52), transparent 64%),
+    radial-gradient(36vmax 36vmax at 94% 8%, rgba(232, 119, 34, 0.42), transparent 64%),
+    radial-gradient(30vmax 30vmax at 52% 46%, rgba(110, 140, 255, 0.36), transparent 66%),
+    radial-gradient(46vmax 46vmax at 78% 100%, rgba(100, 135, 255, 0.46), transparent 64%),
+    radial-gradient(34vmax 34vmax at 0% 96%, rgba(255, 160, 105, 0.52), transparent 64%);
+}
+
+/* ---------- header ---------- */
+header {
+  color: var(--primary);
+  background: var(--glass-fill-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-edge);
+  box-shadow: 0 10px 28px -16px rgba(29, 51, 117, 0.35);
+}
+.brand-mark {
+  background: linear-gradient(145deg, #3d58b3 0%, #1d3375 70%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset, 0 6px 14px -4px rgba(29, 51, 117, 0.55);
+}
+
+/* ---------- glass surfaces ---------- */
+.panel,
+.metric-card,
+.login-card {
+  background: var(--glass-sheen), var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--glass-radius);
+  box-shadow: var(--glass-shadow);
+}
+.metric-card .footnote { border-radius: 0 0 calc(var(--glass-radius) - 1px) calc(var(--glass-radius) - 1px); }
+
+.note-card,
+.locked-notice {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+.badge-pill,
+.period-select {
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 6px 14px -8px rgba(29, 51, 117, 0.3);
+}
+
+/* ---------- buttons ---------- */
+.btn {
+  background: var(--glass-sheen), var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 6px 14px -8px rgba(29, 51, 117, 0.35);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.btn:hover { background: var(--glass-sheen), var(--glass-fill-strong); }
+.btn-primary,
+.inbox-actions button.primary,
+.inbox-detail .composer button {
+  background: linear-gradient(180deg, #3a54ad 0%, #1d3375 100%);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 8px 16px -8px rgba(29, 51, 117, 0.7);
+}
+.btn-primary:hover { background: linear-gradient(180deg, #4560bc 0%, #263e8a 100%); }
+
+/* ---------- tabs: one floating glass pill ---------- */
+.tab-bar {
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 8px 18px -10px rgba(29, 51, 117, 0.3);
+}
+.tab-btn {
+  border: none;
+  margin: 0;
+  border-radius: 999px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.tab-btn.active {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--primary);
+  box-shadow: 0 1px 0 #fff inset, 0 4px 10px -4px rgba(29, 51, 117, 0.35);
+}
+
+/* ---------- form fields ---------- */
+.field input,
+.field select,
+.field textarea,
+#patient-search,
+.status-select,
+.sim-controls input,
+.inbox-detail .composer input {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(29, 51, 117, 0.16);
+  box-shadow: 0 1px 2px rgba(29, 51, 117, 0.06) inset;
+}
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible,
+#patient-search:focus-visible,
+.sim-controls input:focus-visible,
+.inbox-detail .composer input:focus-visible {
+  outline: 2px solid rgba(46, 67, 133, 0.6);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 5px rgba(46, 67, 133, 0.14);
+}
+
+/* ---------- lists / selection ---------- */
+.patient-row:hover { background: var(--glass-fill); }
+.patient-row.active {
+  background: linear-gradient(135deg, rgba(29, 51, 117, 0.94), rgba(46, 67, 133, 0.88));
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 8px 18px -10px rgba(29, 51, 117, 0.8);
+}
+
+.patient-row.active .p-meta { color: rgba(220, 228, 255, 0.9); }
+
+/* case transcript bubbles (CRM) */
+.transcript-msg { border: 1px solid var(--glass-edge); }
+.transcript-msg.patient { background: rgba(255, 255, 255, 0.78); }
+.transcript-msg.bot,
+.transcript-msg.system { background: rgba(220, 228, 255, 0.75); }
+.transcript-msg.human_agent { background: rgba(255, 219, 200, 0.78); }
+
+/* ---------- dashboard bits ---------- */
+.hbar-track { background: rgba(29, 51, 117, 0.08); }
+.bar-chart-grid .gline span {
+  background: none;
+  text-shadow: 0 0 5px rgba(255, 255, 255, 0.95), 0 0 2px rgba(255, 255, 255, 0.95);
+}
+.status-tag.pending { background: rgba(29, 51, 117, 0.08); }
+
+/* ---------- toast ---------- */
+.toast {
+  background: rgba(26, 28, 27, 0.8);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.toast.error { background: rgba(186, 26, 26, 0.88); }
+
+/* ---------- simulator ---------- */
+header .sub { color: var(--on-surface-variant); opacity: 1; }
+.alarm-toggle {
+  border: 1px solid rgba(29, 51, 117, 0.25);
+  background: var(--glass-fill-soft);
+  color: var(--primary);
+}
+.alarm-toggle.on { background: var(--primary); color: #fff; border-color: transparent; }
+
+.pane-left {
+  background: transparent;
+  border-right: 1px solid var(--glass-edge);
+}
+.sim-controls button,
+.inbox-actions button {
+  background: var(--glass-sheen), var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+.sim-controls label { color: var(--on-surface-variant); }
+
+/* The phone keeps WhatsApp's own colours inside (it is a simulator), but the
+   bezel becomes a dark glass slab so it sits in the scene. */
+.phone-frame {
+  background: linear-gradient(160deg, #2c3552 0%, #0f1424 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 34px 60px -24px rgba(29, 51, 117, 0.65);
+}
+
+.inbox-list {
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--glass-edge);
+}
+.pane-title {
+  background: var(--glass-fill-strong);
+  border-bottom: 1px solid var(--glass-edge);
+}
+.inbox-item { border-bottom: 1px solid rgba(29, 51, 117, 0.08); }
+.inbox-item:hover { background: var(--glass-fill-strong); }
+.inbox-item.selected {
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 3px 0 0 var(--primary) inset;
+}
+.inbox-detail-header,
+.inbox-detail .composer {
+  background: var(--glass-fill-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-edge);
+}
+.inbox-detail .chat-scroll { background: rgba(255, 255, 255, 0.22); }
+.inbox-detail .bubble { border: 1px solid var(--glass-edge); }
+
+/* ---------- fallbacks ---------- */
+/* No backdrop-filter (older browsers): keep text readable on a near-solid fill. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --glass-fill: rgba(255, 255, 255, 0.9);
+    --glass-fill-strong: rgba(255, 255, 255, 0.95);
+    --surface-container-lowest: rgba(255, 255, 255, 0.92);
+  }
+}
+/* Respect the OS "reduce transparency" setting. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-fill: #ffffff;
+    --glass-fill-strong: #ffffff;
+    --glass-fill-soft: #f4f5fb;
+    --surface-container-lowest: #ffffff;
+    --surface-container-low: #f4f3f1;
+  }
+  * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+}

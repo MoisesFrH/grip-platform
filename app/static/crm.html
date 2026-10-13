@@ -146,9 +146,34 @@
     border-radius: 10px; padding: 10px 12px; font-size: 0.82rem; margin-bottom: 14px;
   }
 
+  /* ---------- tabs ---------- */
+  .tab-bar { display: flex; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid var(--surface-container-highest); }
+  .tab-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 16px; border: none; background: none; cursor: pointer;
+    font-size: 0.85rem; font-weight: 600; color: var(--on-surface-variant);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .tab-btn:hover:not(.active) { color: var(--on-surface); }
+
   /* ---------- workspace ---------- */
   .workspace { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
   @media (max-width: 860px) { .workspace { grid-template-columns: 1fr; } }
+  .hint { font-size: 0.78rem; color: var(--on-surface-variant); margin: -6px 0 10px; }
+
+  /* ---------- cases ---------- */
+  .case-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .case-meta-label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--on-surface-variant); }
+  .transcript { display: flex; flex-direction: column; gap: 8px; max-height: 55vh; overflow-y: auto; padding: 4px; }
+  .transcript-msg {
+    max-width: 78%; padding: 8px 11px; border-radius: 10px; font-size: 0.84rem; line-height: 1.35;
+    white-space: pre-wrap; word-wrap: break-word;
+  }
+  .transcript-msg .t-meta { display: block; font-size: 0.65rem; color: var(--on-surface-variant); margin-top: 3px; }
+  .transcript-msg.patient { align-self: flex-start; background: var(--surface-container-high); }
+  .transcript-msg.bot, .transcript-msg.system { align-self: flex-end; background: var(--primary-fixed); }
+  .transcript-msg.human_agent { align-self: flex-end; background: var(--secondary-fixed); }
 
   .panel {
     background: var(--surface-container-lowest);
@@ -227,6 +252,7 @@
   .toast.show { opacity: 1; }
   .toast.error { background: var(--error); }
 </style>
+<link href="/assets/glass.css" rel="stylesheet" />
 </head>
 <body>
 
@@ -271,6 +297,16 @@
         </button>
       </form>
     </div>
+  </div>
+
+  <!-- ===== TAB BAR (post-login) ===== -->
+  <div class="tab-bar hidden" id="tab-bar">
+    <button type="button" class="tab-btn active" id="tab-btn-patients">
+      <span class="material-symbols-outlined">groups</span>Pacientes
+    </button>
+    <button type="button" class="tab-btn" id="tab-btn-cases">
+      <span class="material-symbols-outlined">emergency</span>Casos escalados
+    </button>
   </div>
 
   <!-- ===== WORKSPACE (post-login) ===== -->
@@ -362,13 +398,52 @@
     </div>
   </div>
 
+  <!-- ===== CASES (post-login) ===== -->
+  <div class="workspace hidden" id="cases-view">
+
+    <div class="panel">
+      <h2><span class="material-symbols-outlined">emergency</span>Casos escalados</h2>
+      <p class="hint">Toda conversación que alguna vez pasó a una persona — abierta o ya resuelta.</p>
+      <div class="patient-list" id="case-list"></div>
+    </div>
+
+    <div class="panel" id="case-detail-panel">
+      <div class="empty-state" id="case-detail-empty">Selecciona un caso de la lista para ver la conversación completa.</div>
+      <div id="case-detail-content" class="hidden">
+
+        <div class="detail-header">
+          <div>
+            <p class="name" id="case-contact-name">—</p>
+            <span class="phone" id="case-contact-phone">—</span>
+          </div>
+          <span class="status-chip" id="case-status">—</span>
+        </div>
+
+        <div class="section">
+          <div class="case-meta-grid">
+            <div><span class="case-meta-label">Motivo</span><span id="case-reason">—</span></div>
+            <div><span class="case-meta-label">Prioridad</span><span id="case-priority">—</span></div>
+            <div><span class="case-meta-label">Escalado</span><span id="case-triggered-at">—</span></div>
+            <div><span class="case-meta-label">Reclamado por</span><span id="case-claimed">—</span></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3 style="margin:0 0 8px;">Conversación completa</h3>
+          <div class="transcript" id="case-transcript"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <div class="toast" id="toast"></div>
 
 <script>
 (function () {
-  const state = { staff: null, patients: [], selectedPatientId: null };
+  const state = { staff: null, patients: [], selectedPatientId: null, cases: [], selectedCaseId: null };
 
   const $ = (id) => document.getElementById(id);
 
@@ -400,6 +475,12 @@
   const CONTACT_STATUS_LABELS = {
     NEW_CONTACT: "Nuevo contacto", ACTIVE: "Activo", AWAITING_HUMAN: "Esperando a un humano", CLOSED: "Cerrado",
   };
+  const CASE_STATUS_LABELS = {
+    BOT_ACTIVE: "Bot activo", WAITING_FOR_PATIENT: "Esperando paciente", WAITING_FOR_HUMAN: "Esperando agente",
+    HUMAN_ACTIVE: "Agente activo", HUMAN_RESOLVED: "Resuelto", BOT_RESUMED: "Bot reanudado", CLOSED: "Cerrado",
+  };
+  const CASE_PRIORITY_LABELS = { CRITICAL: "Crítica", HIGH: "Alta", MEDIUM: "Media", LOW: "Baja" };
+  const SENDER_LABELS = { patient: "Paciente", bot: "Bot", human_agent: "Agente", system: "Sistema" };
 
   // ---------- auth ----------
 
@@ -415,18 +496,38 @@
 
   function showLogin() {
     $("login-view").classList.remove("hidden");
+    $("tab-bar").classList.add("hidden");
     $("workspace-view").classList.add("hidden");
+    $("cases-view").classList.add("hidden");
     $("staff-box").classList.add("hidden");
   }
 
   function enterWorkspace() {
     $("login-view").classList.add("hidden");
+    $("tab-bar").classList.remove("hidden");
     $("workspace-view").classList.remove("hidden");
     $("staff-box").classList.remove("hidden");
     $("staff-name").textContent = state.staff.display_name;
     $("staff-role").textContent = state.staff.role === "DOCTOR" ? "Doctor/a" : "Secretaría";
     loadPatients();
   }
+
+  // ---------- tabs ----------
+
+  $("tab-btn-patients").addEventListener("click", () => {
+    $("tab-btn-patients").classList.add("active");
+    $("tab-btn-cases").classList.remove("active");
+    $("workspace-view").classList.remove("hidden");
+    $("cases-view").classList.add("hidden");
+  });
+
+  $("tab-btn-cases").addEventListener("click", () => {
+    $("tab-btn-cases").classList.add("active");
+    $("tab-btn-patients").classList.remove("active");
+    $("cases-view").classList.remove("hidden");
+    $("workspace-view").classList.add("hidden");
+    loadCases();
+  });
 
   $("login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -456,6 +557,9 @@
     try { await api("/crm/logout", { method: "POST" }); } catch (e) {}
     state.staff = null;
     state.selectedPatientId = null;
+    state.selectedCaseId = null;
+    $("tab-btn-patients").classList.add("active");
+    $("tab-btn-cases").classList.remove("active");
     showLogin();
   });
 
@@ -689,6 +793,79 @@
       showToast(err.message || "No se pudo guardar la nota.", true);
     }
   });
+
+  // ---------- cases ----------
+
+  async function loadCases() {
+    try {
+      state.cases = await api("/crm/cases");
+      renderCaseList();
+    } catch (e) {
+      if (e.status === 401) { showLogin(); return; }
+      showToast("No se pudo cargar la lista de casos.", true);
+    }
+  }
+
+  function renderCaseList() {
+    const list = $("case-list");
+    list.innerHTML = "";
+    if (!state.cases || state.cases.length === 0) {
+      list.innerHTML = '<div class="empty-state">Ninguna conversación ha sido escalada a una persona todavía.</div>';
+      return;
+    }
+    state.cases.forEach((c) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "patient-row" + (c.id === state.selectedCaseId ? " active" : "");
+      const when = c.handoff_triggered_at ? formatInClinicTime(c.handoff_triggered_at) : "—";
+      row.innerHTML = `
+        <span class="p-name">${escapeHtml(c.contact_name || "(sin nombre)")}</span>
+        <span class="p-phone">${escapeHtml(c.contact_phone)} · ${CASE_STATUS_LABELS[c.status] || c.status}</span>
+        <span class="p-meta">${escapeHtml(c.handoff_reason || "")} · ${when}</span>
+      `;
+      row.addEventListener("click", () => selectCase(c.id));
+      list.appendChild(row);
+    });
+  }
+
+  async function selectCase(id) {
+    state.selectedCaseId = id;
+    renderCaseList();
+    $("case-detail-empty").classList.add("hidden");
+    $("case-detail-content").classList.remove("hidden");
+    try {
+      const detail = await api(`/crm/cases/${id}`);
+      renderCaseDetail(detail);
+    } catch (e) {
+      showToast("No se pudo cargar este caso.", true);
+    }
+  }
+
+  function renderCaseDetail(detail) {
+    $("case-contact-name").textContent = detail.contact_name || "(sin nombre)";
+    $("case-contact-phone").textContent = detail.contact_phone;
+    $("case-status").textContent = CASE_STATUS_LABELS[detail.status] || detail.status;
+    $("case-reason").textContent = detail.handoff_reason || "—";
+    $("case-priority").textContent = CASE_PRIORITY_LABELS[detail.handoff_priority] || detail.handoff_priority || "—";
+    $("case-triggered-at").textContent = detail.handoff_triggered_at ? formatInClinicTime(detail.handoff_triggered_at) : "—";
+    $("case-claimed").textContent = detail.assigned_to
+      ? `${escapeHtml(detail.assigned_to)}${detail.claimed_at ? " · " + formatInClinicTime(detail.claimed_at) : ""}`
+      : "Sin reclamar";
+
+    const transcript = $("case-transcript");
+    transcript.innerHTML = "";
+    detail.messages.forEach((m) => {
+      const bubble = document.createElement("div");
+      bubble.className = "transcript-msg " + m.sender;
+      bubble.innerHTML = `${linkifyPlain(m.body)}<span class="t-meta">${SENDER_LABELS[m.sender] || m.sender} · ${formatInClinicTime(m.created_at)}${m.intent ? " · " + escapeHtml(m.intent) : ""}</span>`;
+      transcript.appendChild(bubble);
+    });
+  }
+
+  function linkifyPlain(text) {
+    if (!text) return "";
+    return escapeHtml(text).replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  }
 
   function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, (c) => ({
