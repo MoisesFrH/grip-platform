@@ -1,10 +1,10 @@
 """
-Creates or updates a GRIP staff account (secretary or doctor) so they can
+Creates or updates an ND Neurodiversa staff account (secretary or doctor) so they can
 log into the internal CRM screen at /crm.
 
 Deliberately a script, not a signup screen: the client (Dome) asked for
 staff accounts to be created this way rather than self-service, since the
-list of who works at GRIP and what role they hold is short and changes
+list of who works at the center and what role they hold is short and changes
 rarely, and a signup screen would be one more thing an attacker could try
 against.
 
@@ -39,7 +39,7 @@ from app.services import auth
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create or update a GRIP staff account.")
+    parser = argparse.ArgumentParser(description="Create or update an ND Neurodiversa staff account.")
     parser.add_argument("--username", required=True)
     parser.add_argument("--name", dest="display_name")
     parser.add_argument("--role", choices=["secretary", "doctor"])

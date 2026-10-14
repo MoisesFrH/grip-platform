@@ -124,8 +124,17 @@ def test_unmapped_intent_is_rejected_before_calling_the_model() -> None:
 
 
 def test_therapist_name_argument_is_forwarded_to_the_tool() -> None:
-    db = SessionLocal()
-    tenant = db.query(Tenant).filter(Tenant.slug == "grip").one()
+    # In-memory tenant: the real center has not confirmed its therapists yet,
+    # and this test is about forwarding the argument, not any center's data.
+    tenant = Tenant(
+        name="Centro de prueba",
+        slug="prueba",
+        config={
+            "therapists": [
+                {"name": "Andrés Salas", "specialties": ["Terapia de pareja"], "availability": "🟡"},
+            ]
+        },
+    )
 
     fake_client = FakeGenaiClient(tool_name="get_therapist_availability", final_text="Andrés está con disponibilidad limitada.")
     # Override args on the scripted call to simulate Gemini extracting the name.
@@ -152,8 +161,6 @@ def test_therapist_name_argument_is_forwarded_to_the_tool() -> None:
 
     assert result.tool_results["get_therapist_availability"]["therapists"][0]["name"] == "Andrés Salas"
     assert result.tool_results["get_therapist_availability"]["therapists"][0]["availability"] == "🟡"
-
-    db.close()
     print("PASS: test_therapist_name_argument_is_forwarded_to_the_tool")
 
 

@@ -49,6 +49,32 @@ def _grip() -> Tenant:
     return tenant
 
 
+def _with_configured_safety_protocol(tenant: Tenant) -> Tenant:
+    """The real tenant row only has the generic fallback protocol. This test
+    is about the tenant-configured path, so use a transient copy (same id,
+    never added to the session) that has a protocol configured."""
+    return Tenant(
+        id=tenant.id,
+        name=tenant.name,
+        slug=tenant.slug,
+        config={
+            **tenant.config,
+            "safety_protocol": {
+                "actions": {
+                    "SUICIDE_OR_SELF_HARM": {
+                        "patient_message": (
+                            "Gracias por confiarme esto. Voy a conectarte ahora mismo con el equipo "
+                            "clínico de guardia; alguien te va a escribir en los próximos minutos."
+                        ),
+                        "handoff_note": "Riesgo de autolesión/suicidio detectado. Escalar de inmediato.",
+                        "notify": ["on_call_psychologist"],
+                    }
+                }
+            },
+        },
+    )
+
+
 def _test_phone() -> str:
     return f"+1555{uuid.uuid4().int % 10_000_000:07d}"
 
@@ -113,7 +139,7 @@ def test_category_b_message_hands_off_without_calling_gemini_answer() -> None:
 
 def test_safety_risk_uses_tenants_configured_protocol_message() -> None:
     db = SessionLocal()
-    tenant = _grip()
+    tenant = _with_configured_safety_protocol(_grip())
     phone = _test_phone()
     fake_gemini = FakeGeminiClient()
 
@@ -122,7 +148,7 @@ def test_safety_risk_uses_tenants_configured_protocol_message() -> None:
         db.commit()
 
         assert result.status == ConversationStatus.WAITING_FOR_HUMAN
-        assert "guardia de GRIP" in result.reply_text  # the tenant-configured message from scripts/seed_grip.py
+        assert "equipo clínico de guardia" in result.reply_text  # the tenant-configured message
         assert result.classification.priority.value == "CRITICAL"
         assert fake_gemini.answer_calls == []
         assert fake_gemini.classify_calls == []  # safety short-circuits before any Gemini call at all

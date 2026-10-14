@@ -1,5 +1,5 @@
 """
-Seeds a realistic-looking demo dataset for the GRIP tenant — patients,
+Seeds a realistic-looking demo dataset for the ND Neurodiversa tenant (slug "grip") — patients,
 appointments, AND conversation/message history — so both the internal CRM
 (/crm) and the dashboard (/dashboard) have something to show during a demo
 instead of looking empty.
@@ -166,7 +166,7 @@ def seed() -> None:
             db, tenant, wanda, days_ago=3, hour=10, status=ConversationStatus.CLOSED,
             turns=[
                 (IN, PATIENT, "Buenas, quisiera saber cómo puedo agendar una cita", "BOOKING_GUIDANCE"),
-                (OUT, BOT, "Claro, puedes reservar directamente desde nuestra app en booking.grip-centro.com.", None),
+                (OUT, BOT, "Claro, escríbenos por aquí el servicio y el horario que prefieres y alguien del equipo te confirma la cita.", None),
                 (IN, PATIENT, "Perfecto, gracias", None),
             ],
         )
@@ -274,7 +274,7 @@ def seed() -> None:
             db, tenant, ana, days_ago=6, hour=8, status=ConversationStatus.CLOSED,
             turns=[
                 (IN, PATIENT, "Hola, ¿dónde queda la clínica?", "LOCATION"),
-                (OUT, BOT, "Estamos en Paseo de los Notarios 25, Santo Domingo. Aquí tienes el mapa: [enlace]", None),
+                (OUT, BOT, "Estamos en C/ Antonio Pasica 16, Moca. Aquí tienes el mapa: [enlace]", None),
             ],
         )
 
@@ -316,7 +316,7 @@ def seed() -> None:
             db, tenant, esteban, days_ago=0.02, hour=_now().hour, status=ConversationStatus.HUMAN_ACTIVE,
             turns=[
                 (IN, PATIENT, "Quisiera hablar con alguien del equipo directamente, por favor", "HUMAN_REQUEST"),
-                (OUT, HUMAN, "Hola Esteban, soy parte del equipo de GRIP, ¿en qué te puedo ayudar?", None),
+                (OUT, HUMAN, "Hola Esteban, soy parte del equipo de ND Neurodiversa, ¿en qué te puedo ayudar?", None),
             ],
             handoff_reason="Paciente solicitó hablar directamente con una persona",
             handoff_priority="MEDIUM",

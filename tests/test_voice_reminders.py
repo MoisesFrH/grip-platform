@@ -157,15 +157,15 @@ def test_synthesize_reminder_voice_chains_speech_and_conversion():
     assert result[:4] == b"OggS"
 
 
-def test_synthesize_reminder_voice_rewrites_all_caps_grip_so_it_is_not_spelled_out():
-    # Gemini's TTS was spelling "GRIP" out letter by letter, reading it as
-    # an acronym rather than the center's name — confirm the text actually
-    # sent to the model uses mixed case ("Grip") instead, while the
-    # ORIGINAL text (the real WhatsApp message) is untouched by this.
+def test_synthesize_reminder_voice_tells_the_model_how_to_say_the_center_name():
+    # "ND" would otherwise be read with English letter names; the style
+    # instruction asks for Spanish letters, and the reminder text itself is
+    # sent exactly as written.
     fake_client = FakeGenaiClient(audio_bytes=_silent_pcm())
-    original_text = "Hola, te recordamos tu cita mañana con María en el GRIP."
+    original_text = "Hola, te recordamos tu cita mañana con María en ND Neurodiversa."
     voice_reminders.synthesize_reminder_voice(original_text, client=fake_client)
 
     sent_to_tts = fake_client.models.calls[0]["contents"]
-    assert "GRIP" not in sent_to_tts
-    assert "Grip" in sent_to_tts
+    assert "ND Neurodiversa" in sent_to_tts
+    assert "ene de" in sent_to_tts
+    assert sent_to_tts.endswith(original_text)

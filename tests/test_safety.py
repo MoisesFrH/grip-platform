@@ -66,12 +66,38 @@ def test_tenant_extra_keyword_is_picked_up() -> None:
 
 
 def test_protocol_resolution_uses_tenant_config_when_present() -> None:
-    tenant = _grip()
+    # In-memory tenant on purpose: the real center has not written its own
+    # protocol yet (see scripts/seed_grip.py), and this test is about the
+    # mechanism, not about any one center's text.
+    tenant = Tenant(
+        name="Centro de prueba",
+        slug="prueba",
+        config={
+            "safety_protocol": {
+                "actions": {
+                    "SUICIDE_OR_SELF_HARM": {
+                        "patient_message": "Te conecto ahora mismo con el equipo clínico de guardia.",
+                        "handoff_note": "Riesgo detectado. Escalar de inmediato.",
+                        "notify": ["on_call_psychologist", "clinical_director"],
+                    }
+                }
+            }
+        },
+    )
     action = resolve_protocol_action(tenant, SafetyCategory.SUICIDE_OR_SELF_HARM, SafetyPriority.CRITICAL)
     assert action.configured is True
-    assert "guardia de GRIP" in action.patient_message
+    assert "equipo clínico de guardia" in action.patient_message
     assert action.notify == ["on_call_psychologist", "clinical_director"]
     print("PASS: test_protocol_resolution_uses_tenant_config_when_present")
+
+
+def test_seeded_tenant_without_its_own_protocol_uses_the_generic_fallback() -> None:
+    # ND Neurodiversa has not provided a protocol yet, so a self-harm message
+    # must still reach a human through the generic path, never go unanswered.
+    tenant = _grip()
+    action = resolve_protocol_action(tenant, SafetyCategory.SUICIDE_OR_SELF_HARM, SafetyPriority.CRITICAL)
+    assert action.configured is False
+    assert action.patient_message
 
 
 def test_protocol_resolution_falls_back_generically_when_unconfigured() -> None:

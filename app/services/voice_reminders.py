@@ -1,6 +1,6 @@
 """
 PROTOTYPE — not wired into the real reminder pipeline. appointments.send_reminder
-still only sends text; nothing here changes that. This exists so GRIP can
+still only sends text; nothing here changes that. This exists so the center can
 listen to a sample and decide whether a voice-note reminder is worth
 pursuing before any of that work happens.
 
@@ -26,13 +26,12 @@ Requires network access to Google's API and a real GEMINI_API_KEY to
 actually run — this sandbox's egress policy blocks
 generativelanguage.googleapis.com, so this was built and tested with a
 fake client (tests/test_voice_reminders.py) plus a real, local run of the
-ffmpeg conversion step (which needs no network). GRIP needs to try the
+ffmpeg conversion step (which needs no network). The center needs to try the
 full path themselves, e.g. by opening a patient's voice-reminder preview
 in /crm once this is deployed to Railway (which does have outbound
 network access).
 """
 
-import re
 import subprocess
 
 from google import genai
@@ -51,7 +50,7 @@ _TTS_MODEL = "gemini-2.5-flash-preview-tts"
 
 # One of Gemini's prebuilt voices — "Kore" reads as calm/neutral, which
 # fits an appointment reminder better than an upbeat or dramatic voice.
-# Swap this (or make it a tenant setting) if GRIP wants a different tone;
+# Swap this (or make it a tenant setting) if the center wants a different tone;
 # see Gemini's docs for the full prebuilt-voice list.
 DEFAULT_VOICE_NAME = "Kore"
 
@@ -59,30 +58,25 @@ DEFAULT_VOICE_NAME = "Kore"
 # instruction placed before the actual content steers HOW it's read
 # (accent, tone, pace) without being read aloud itself. Without this, the
 # model defaults to a generic/Mexican-leaning Spanish accent, which isn't
-# what GRIP's Dominican patients are used to hearing. This is a prompt,
+# what Dominican patients are used to hearing. This is a prompt,
 # not a guarantee — worth listening to a few samples after any wording
 # change to confirm it's still landing as intended.
 _ACCENT_STYLE_INSTRUCTION = (
     "Lee el siguiente mensaje en voz alta con acento dominicano natural, "
-    "cálido y cotidiano, como lo hablaría alguien de Santo Domingo, "
-    "República Dominicana. Evita un acento mexicano o neutro. "
-    "La palabra \"Grip\" es el nombre del centro y se pronuncia como una "
-    "sola palabra en español (rima con \"chip\"), nunca deletreada letra "
-    "por letra y nunca en inglés. "
+    "cálido y cotidiano, como lo hablaría alguien de República Dominicana. "
+    "Evita un acento mexicano o neutro. "
+    "El nombre del centro es \"ND Neurodiversa\": \"ND\" se lee letra por "
+    "letra en español, \"ene de\", nunca en inglés, y \"Neurodiversa\" se "
+    "lee como una sola palabra en español. "
     "El mensaje es: "
 )
 
-# Gemini's TTS tends to treat an all-caps word as an acronym and spell it
-# out letter by letter ("G-R-I-P") instead of reading it as a word — which
-# is wrong here, since GRIP is the center's name, not an acronym. Mixed
-# case reads as an ordinary word instead. This ONLY changes what's sent to
-# the TTS model — the actual WhatsApp text message (build_reminder_message)
-# keeps "GRIP" exactly as written; this rewrite never touches that.
-_ALL_CAPS_GRIP_PATTERN = re.compile(r"\bGRIP\b")
-
 
 def _text_for_speech(text: str) -> str:
-    return _ALL_CAPS_GRIP_PATTERN.sub("Grip", text)
+    # Hook for any future per-name pronunciation fixes. The center's name
+    # ("ND Neurodiversa") is handled by the style instruction above, so the
+    # text is passed through exactly as written.
+    return text
 
 
 class VoiceSynthesisError(Exception):

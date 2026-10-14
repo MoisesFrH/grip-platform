@@ -20,7 +20,8 @@ from app.services.text_utils import compile_keyword_pattern, normalize
 
 DEFAULT_KEYWORDS: dict[Intent, list[str]] = {
     Intent.GENERAL_INFO: [
-        "informacion general", "que es grip", "quienes son", "que hacen ustedes",
+        "informacion general", "que es nd", "que es nd neurodiversa", "que es neurodiversa",
+        "quienes son", "que hacen ustedes",
         "cuentenme sobre", "a que se dedican",
     ],
     Intent.LOCATION: [

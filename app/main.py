@@ -12,7 +12,7 @@ from app.api.routes.simulator import router as simulator_router
 from app.core.config import get_settings
 from app.core.db import get_db
 
-app = FastAPI(title="GRIP / ATR Conversational Platform", version="0.1.0")
+app = FastAPI(title="ND Neurodiversa — Plataforma conversacional", version="0.1.0")
 
 _SIMULATOR_UI_PATH = Path(__file__).parent / "static" / "simulator.html"
 _DASHBOARD_UI_PATH = Path(__file__).parent / "static" / "dashboard.html"
