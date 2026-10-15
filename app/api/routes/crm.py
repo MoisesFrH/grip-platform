@@ -27,10 +27,11 @@ from app.core.db import get_db
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.clinical_note import ClinicalNoteType
 from app.models.contact import Contact
+from app.models.conversation import Conversation
 from app.models.staff import Staff, StaffRole, StaffSession
 from app.models.tenant import Tenant
 from app.services import appointments as appointments_service
-from app.services import auth, clinical_notes, voice_reminders
+from app.services import auth, clinical_notes, patient_summary, voice_reminders
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 
@@ -105,6 +106,21 @@ def _get_appointment_or_404(db: Session, staff: Staff, appointment_id: str) -> A
     if appointment is None:
         raise HTTPException(status_code=404, detail="Cita no encontrada.")
     return appointment
+
+
+def _get_case_or_404(db: Session, staff: Staff, conversation_id: str) -> Conversation:
+    try:
+        conversation_uuid = uuid.UUID(conversation_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Caso no encontrado.")
+    conversation = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_uuid, Conversation.tenant_id == staff.tenant_id)
+        .one_or_none()
+    )
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Caso no encontrado.")
+    return conversation
 
 
 # --- schemas ----------------------------------------------------------------
@@ -189,6 +205,33 @@ class CreateNoteRequest(BaseModel):
     note_type: str
     content: str
     appointment_id: str | None = None
+
+
+class CaseSummaryOut(BaseModel):
+    id: str
+    contact_id: str
+    contact_name: str | None
+    contact_phone: str
+    status: str
+    handoff_reason: str | None
+    handoff_priority: str | None
+    handoff_triggered_at: str | None
+    claimed_at: str | None
+    assigned_to: str | None
+    last_message_at: str | None
+
+
+class CaseMessageOut(BaseModel):
+    id: str
+    direction: str
+    sender: str
+    body: str | None
+    intent: str | None
+    created_at: str
+
+
+class CaseDetailOut(CaseSummaryOut):
+    messages: list[CaseMessageOut]
 
 
 # --- auth routes -------------------------------------------------------------
@@ -458,6 +501,36 @@ def create_note_route(
     )
 
 
+class PatientSummaryOut(BaseModel):
+    summary: str
+    generated_at: str
+    notes_count: int
+
+
+@router.post("/patients/{contact_id}/summary", response_model=PatientSummaryOut)
+def patient_summary_route(
+    contact_id: str,
+    staff: Staff = Depends(require_doctor),
+    db: Session = Depends(get_db),
+) -> PatientSummaryOut:
+    """On-demand AI summary of a patient's notes. Doctor-only, never
+    automatic, nothing is stored. See app/services/patient_summary.py for
+    what is (and is not) sent to the model."""
+    contact = _get_contact_or_404(db, staff, contact_id)
+    tenant = _get_tenant(db, staff)
+    try:
+        result = patient_summary.summarize_patient(db, tenant, contact)
+    except patient_summary.SummaryUnavailableError:
+        raise HTTPException(status_code=503, detail="El resumen con IA no está configurado (falta GEMINI_API_KEY).")
+    except patient_summary.SummaryGenerationError:
+        raise HTTPException(status_code=502, detail="No se pudo generar el resumen ahora mismo. Intenta de nuevo en un momento.")
+    return PatientSummaryOut(
+        summary=result.summary,
+        generated_at=result.generated_at.isoformat(),
+        notes_count=result.notes_count,
+    )
+
+
 # --- voice reminder prototype (secretary + doctor) ---------------------------
 #
 # PROTOTYPE ONLY — lets staff listen to what a reminder would sound like as
@@ -488,3 +561,68 @@ def voice_reminder_preview(
         # environment can't reach Google's API" while prototyping.
         raise HTTPException(status_code=502, detail=str(exc))
     return Response(content=audio, media_type="audio/ogg")
+
+
+# --- escalated cases (secretary + doctor) -----------------------------------
+#
+# The dashboard (GET /dashboard) only ever shows aggregate counts of
+# handoffs/safety alerts — on purpose, per app.services.analytics's module
+# docstring, so that public-ish metrics view never carries message
+# content. This is the actual case log behind those counts: every
+# conversation that was ever escalated to a human (handoff_reason set),
+# open or already resolved, with its full transcript — staff-authenticated,
+# same as the rest of this file. Visible to either role for now: a
+# secretary legitimately needs this for payment/appointment-change/
+# human-request cases, which is most of what ends up here. If GRIP later
+# wants clinical-content redaction for secretaries specifically (e.g. a
+# CLINICAL_QUESTION/SAFETY_RISK case's message bodies), that's a follow-up,
+# not something this endpoint does today.
+
+
+def _case_summary(conversation: Conversation) -> CaseSummaryOut:
+    contact = conversation.contact
+    return CaseSummaryOut(
+        id=str(conversation.id),
+        contact_id=str(contact.id),
+        contact_name=contact.name or contact.whatsapp_profile_name,
+        contact_phone=contact.phone,
+        status=conversation.status.value,
+        handoff_reason=conversation.handoff_reason,
+        handoff_priority=conversation.handoff_priority,
+        handoff_triggered_at=conversation.handoff_triggered_at.isoformat() if conversation.handoff_triggered_at else None,
+        claimed_at=conversation.claimed_at.isoformat() if conversation.claimed_at else None,
+        assigned_to=conversation.assigned_to,
+        last_message_at=conversation.last_message_at.isoformat() if conversation.last_message_at else None,
+    )
+
+
+@router.get("/cases", response_model=list[CaseSummaryOut])
+def list_cases(staff: Staff = Depends(get_current_staff), db: Session = Depends(get_db)) -> list[CaseSummaryOut]:
+    conversations = (
+        db.query(Conversation)
+        .filter(Conversation.tenant_id == staff.tenant_id, Conversation.handoff_reason.isnot(None))
+        .order_by(Conversation.handoff_triggered_at.desc().nullslast())
+        .limit(200)
+        .all()
+    )
+    return [_case_summary(c) for c in conversations]
+
+
+@router.get("/cases/{conversation_id}", response_model=CaseDetailOut)
+def get_case(conversation_id: str, staff: Staff = Depends(get_current_staff), db: Session = Depends(get_db)) -> CaseDetailOut:
+    conversation = _get_case_or_404(db, staff, conversation_id)
+    summary = _case_summary(conversation)
+    return CaseDetailOut(
+        **summary.model_dump(),
+        messages=[
+            CaseMessageOut(
+                id=str(m.id),
+                direction=m.direction.value,
+                sender=m.sender.value,
+                body=m.body,
+                intent=m.intent,
+                created_at=m.created_at.isoformat(),
+            )
+            for m in conversation.messages
+        ],
+    )

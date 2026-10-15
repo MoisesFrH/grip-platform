@@ -84,6 +84,32 @@ def _reset_demo_history(db, contact: Contact) -> None:
     db.flush()
 
 
+def _add_note(
+    db,
+    tenant: Tenant,
+    contact: Contact,
+    *,
+    days_ago: float,
+    author: str,
+    content: str,
+    note_type: ClinicalNoteType = ClinicalNoteType.NOTE,
+    appointment: Appointment | None = None,
+) -> ClinicalNote:
+    """Adds one fictional clinical note, dated `days_ago` days back so the
+    patient's history reads like real follow-up over several weeks."""
+    note = ClinicalNote(
+        tenant_id=tenant.id,
+        contact_id=contact.id,
+        appointment_id=appointment.id if appointment else None,
+        author_name=author,
+        note_type=note_type,
+        content=content,
+    )
+    note.created_at = _now() - timedelta(days=days_ago)
+    db.add(note)
+    return note
+
+
 def _seed_conversation(
     db,
     tenant: Tenant,
@@ -162,6 +188,42 @@ def seed() -> None:
         appointments_service.create_appointment(
             db, tenant, wanda, therapist_name="María Fernanda Ruiz", scheduled_at=_now() + timedelta(hours=20)
         )
+        # Fictional notes (demo data only) so the "Resumen con IA" button in
+        # the CRM has real material to summarize.
+        _add_note(
+            db, tenant, wanda, days_ago=42, author="María Fernanda Ruiz",
+            content=(
+                "Consulta por dificultad sostenida para concentrarse en el trabajo, "
+                "olvidos frecuentes y desorden con las tareas. Antecedente de bajo "
+                "rendimiento escolar en la infancia. Se inicia evaluación de "
+                "atención y funciones ejecutivas."
+            ),
+        )
+        _add_note(
+            db, tenant, wanda, days_ago=28, author="María Fernanda Ruiz",
+            content=(
+                "Completadas las escalas de atención. Resultados compatibles con "
+                "un perfil de inatención marcado; se necesita descartar ansiedad "
+                "como factor de fondo. Paciente colaboradora, llega puntual."
+            ),
+        )
+        _add_note(
+            db, tenant, wanda, days_ago=14, author="María Fernanda Ruiz",
+            note_type=ClinicalNoteType.RECOMMENDATION,
+            content=(
+                "Recomendaciones: agenda semanal con alarmas, dividir tareas en "
+                "pasos cortos y bloques de trabajo de 25 minutos con pausa. "
+                "Revisar cómo le fue con estas estrategias en la próxima sesión."
+            ),
+        )
+        _add_note(
+            db, tenant, wanda, days_ago=2, author="María Fernanda Ruiz",
+            content=(
+                "Refiere que las alarmas ayudan, pero le cuesta mantener la "
+                "rutina los fines de semana. Pendiente: devolución de resultados "
+                "y valorar derivación a psiquiatría para evaluación médica."
+            ),
+        )
         _seed_conversation(
             db, tenant, wanda, days_ago=3, hour=10, status=ConversationStatus.CLOSED,
             turns=[
@@ -180,6 +242,31 @@ def seed() -> None:
         apt_carlos.reminder_sent_at = _now() - timedelta(hours=2)
         apt_carlos.reminder_response = ReminderResponse.CONFIRMED
         apt_carlos.status = AppointmentStatus.CONFIRMED
+        _add_note(
+            db, tenant, carlos, days_ago=35, author="Andrés Salas",
+            content=(
+                "Primera consulta. Motivo: dificultades en la interacción social "
+                "y rigidez ante cambios de rutina. Sensibilidad marcada a ruidos "
+                "fuertes. Se acuerdan sesiones semanales de habilidades sociales."
+            ),
+        )
+        _add_note(
+            db, tenant, carlos, days_ago=21, author="Andrés Salas",
+            content=(
+                "Buena respuesta a los apoyos visuales. Practicó iniciar "
+                "conversaciones breves en la sesión. En casa persisten las "
+                "dificultades con las transiciones (salir de casa por la mañana)."
+            ),
+        )
+        _add_note(
+            db, tenant, carlos, days_ago=7, author="Andrés Salas",
+            note_type=ClinicalNoteType.RECOMMENDATION,
+            content=(
+                "Recomendación a la familia: anticipar los cambios con un "
+                "calendario visual, avisar con 10 minutos antes de cada "
+                "transición y mantener un espacio tranquilo en casa."
+            ),
+        )
         _seed_conversation(
             db, tenant, carlos, days_ago=5, hour=14, status=ConversationStatus.CLOSED,
             turns=[
@@ -198,6 +285,22 @@ def seed() -> None:
         apt_rosa.reminder_sent_at = _now() - timedelta(hours=1)
         apt_rosa.reminder_response = ReminderResponse.CANCEL_OR_RESCHEDULE
         apt_rosa.status = AppointmentStatus.RESCHEDULE_REQUESTED
+        _add_note(
+            db, tenant, rosa, days_ago=30, author="María Fernanda Ruiz",
+            content=(
+                "Consulta por retraso en el lenguaje expresivo de su hijo (4 "
+                "años): usa pocas palabras y señala para pedir. Comprensión "
+                "adecuada para su edad. Se solicita informe de audiometría."
+            ),
+        )
+        _add_note(
+            db, tenant, rosa, days_ago=9, author="María Fernanda Ruiz",
+            content=(
+                "Audiometría sin hallazgos. Avance leve: ya combina dos "
+                "palabras en juego simbólico. La madre pide pocos horarios "
+                "disponibles por trabajo; conviene ofrecer citas de tarde."
+            ),
+        )
         _seed_conversation(
             db, tenant, rosa, days_ago=0.05, hour=_now().hour, status=ConversationStatus.WAITING_FOR_HUMAN,
             turns=[
@@ -222,15 +325,23 @@ def seed() -> None:
         )
         apt_past.status = AppointmentStatus.COMPLETED
         db.flush()
-        db.add(ClinicalNote(
-            tenant_id=tenant.id, contact_id=yolanda.id, appointment_id=apt_past.id,
-            author_name="Lucía Torres", note_type=ClinicalNoteType.NOTE,
+        _add_note(
+            db, tenant, yolanda, days_ago=7, author="Lucía Torres", appointment=apt_past,
             content=(
                 "Primera sesión de evaluación. Reporta ansiedad relacionada con el "
                 "trabajo y dificultad para dormir. Se recomienda continuar con la "
                 "batería de evaluación completa en las próximas dos sesiones."
             ),
-        ))
+        )
+        _add_note(
+            db, tenant, yolanda, days_ago=1, author="Lucía Torres",
+            note_type=ClinicalNoteType.RECOMMENDATION,
+            content=(
+                "Recomendaciones para el sueño: horario fijo para acostarse, "
+                "sin pantallas la hora previa y registro diario de cuántas "
+                "horas duerme. Traer el registro a la próxima cita."
+            ),
+        )
         appointments_service.create_appointment(
             db, tenant, yolanda, therapist_name="Lucía Torres", scheduled_at=_now() + timedelta(days=3, hours=4)
         )
@@ -270,6 +381,14 @@ def seed() -> None:
             db, tenant, ana, therapist_name="María Fernanda Ruiz", scheduled_at=_now() - timedelta(days=5)
         )
         apt_ana.status = AppointmentStatus.COMPLETED
+        _add_note(
+            db, tenant, ana, days_ago=5, author="María Fernanda Ruiz", appointment=apt_ana,
+            content=(
+                "Sesión de seguimiento. La hija (7 años) tiene menos conflictos "
+                "con los deberes escolares desde que usan temporizador. La "
+                "escuela pide un informe para adaptar las tareas."
+            ),
+        )
         _seed_conversation(
             db, tenant, ana, days_ago=6, hour=8, status=ConversationStatus.CLOSED,
             turns=[
@@ -285,6 +404,22 @@ def seed() -> None:
             db, tenant, miguel, therapist_name="Andrés Salas", scheduled_at=_now() - timedelta(days=3)
         )
         apt_miguel.status = AppointmentStatus.NO_SHOW
+        _add_note(
+            db, tenant, miguel, days_ago=24, author="Andrés Salas",
+            content=(
+                "Evaluación inicial por dificultades de conducta en el aula y "
+                "baja tolerancia a la frustración. Buena disposición. Se "
+                "plantea plan de trabajo quincenal."
+            ),
+        )
+        _add_note(
+            db, tenant, miguel, days_ago=3, author="Andrés Salas",
+            content=(
+                "No asistió a la sesión programada y no avisó. Segunda "
+                "ausencia en el último mes. Pendiente: contactar a la familia "
+                "para confirmar si el horario sigue siendo viable."
+            ),
+        )
         _seed_conversation(
             db, tenant, miguel, days_ago=4, hour=19, status=ConversationStatus.CLOSED,
             turns=[

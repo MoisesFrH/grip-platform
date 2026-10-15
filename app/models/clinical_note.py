@@ -21,8 +21,11 @@ class ClinicalNote(UUIDPKMixin, TenantMixin, TimestampMixin, Base):
     rules rather than reusing Contact/Appointment's:
 
       - Never read by the bot. Gemini's function-calling allowlist
-        (app.services.tools) never includes a lookup against this table —
-        clinical content must never reach the LLM, in either direction.
+        (app.services.tools) never includes a lookup against this table, and
+        nothing patient-facing (WhatsApp, orchestrator, gemini_client) may
+        read it. The ONE deliberate exception is the doctor-initiated
+        "Resumen con IA" (app.services.patient_summary): a separate path, only
+        on a doctor's explicit click, with minimal data, nothing stored.
       - Never aggregated into analytics/dashboard (app.services.analytics
         only ever counts intents and statuses, never note content).
       - No structured "diagnosis" field, ICD code, or symptom checklist —

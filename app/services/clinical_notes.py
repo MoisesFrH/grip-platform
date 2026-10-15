@@ -1,9 +1,10 @@
 """
 Minimal write/read helpers for ClinicalNote. Deliberately not imported by
 orchestrator.py, gemini_client.py or tools.py — the bot must never read or
-write clinical notes. This module exists for a future internal,
-staff-authenticated screen, not for any WhatsApp-facing or dashboard code
-path.
+write clinical notes. This module serves the internal, staff-authenticated
+CRM screen, not any WhatsApp-facing or dashboard code path. The only AI use
+of notes is the doctor-initiated summary in app/services/patient_summary.py,
+a separate path that never runs from the bot.
 """
 
 from sqlalchemy.orm import Session

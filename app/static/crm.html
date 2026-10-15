@@ -233,6 +233,20 @@
   .note-type-tag.recommendation { background: var(--primary-fixed); color: var(--primary); }
   .note-card .note-content { font-size: 0.86rem; white-space: pre-wrap; }
 
+  .summary-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .summary-hint { font-size: 0.74rem; color: var(--on-surface-variant); }
+  .summary-card {
+    border: 1px solid var(--outline-variant); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px;
+    background: linear-gradient(135deg, rgba(46,67,133,0.10), rgba(255,255,255,0.35));
+  }
+  .summary-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; font-weight: 700; color: var(--primary); margin-bottom: 8px; }
+  .summary-head .material-symbols-outlined { font-size: 1rem; vertical-align: middle; margin-right: 4px; }
+  .summary-close { border: none; background: transparent; font-size: 1.2rem; line-height: 1; cursor: pointer; color: var(--on-surface-variant); }
+  .summary-body { font-size: 0.86rem; white-space: pre-wrap; }
+  .summary-body.loading { color: var(--on-surface-variant); font-style: italic; }
+  .summary-body.error { color: #b3261e; }
+  .summary-foot { margin-top: 8px; font-size: 0.7rem; color: var(--on-surface-variant); }
+
   .locked-notice {
     display: flex; align-items: center; gap: 8px;
     background: var(--surface-container-low); color: var(--on-surface-variant);
@@ -372,6 +386,20 @@
             Las notas clínicas solo son visibles para el personal médico.
           </div>
           <div id="notes-unlocked" class="hidden">
+            <div class="summary-bar">
+              <button class="btn btn-primary" type="button" id="summary-btn">
+                <span class="material-symbols-outlined">auto_awesome</span>Resumen con IA
+              </button>
+              <span class="summary-hint">Solo se genera cuando lo pides.</span>
+            </div>
+            <div class="summary-card hidden" id="summary-card" aria-live="polite">
+              <div class="summary-head">
+                <span><span class="material-symbols-outlined">auto_awesome</span>Resumen con IA</span>
+                <button type="button" class="summary-close" id="summary-close" aria-label="Cerrar resumen">&times;</button>
+              </div>
+              <div class="summary-body" id="summary-body"></div>
+              <div class="summary-foot" id="summary-foot"></div>
+            </div>
             <div id="notes-list"></div>
             <div class="empty-state hidden" id="notes-empty" style="padding:6px 4px;">Sin notas todavía.</div>
 
@@ -665,6 +693,7 @@
     });
 
     // notes
+    resetSummary();
     const isDoctor = state.staff.role === "DOCTOR";
     $("notes-locked").classList.toggle("hidden", isDoctor);
     $("notes-unlocked").classList.toggle("hidden", !isDoctor);
@@ -773,6 +802,43 @@
       selectPatient(state.selectedPatientId);
     } catch (err) {
       showToast(err.message || "No se pudo agendar la cita.", true);
+    }
+  });
+
+  function resetSummary() {
+    $("summary-card").classList.add("hidden");
+    $("summary-body").textContent = "";
+    $("summary-foot").textContent = "";
+    $("summary-btn").disabled = false;
+  }
+
+  $("summary-close").addEventListener("click", resetSummary);
+
+  $("summary-btn").addEventListener("click", async () => {
+    const patientId = state.selectedPatientId;
+    if (!patientId) return;
+    const btn = $("summary-btn");
+    const body = $("summary-body");
+    btn.disabled = true;
+    $("summary-card").classList.remove("hidden");
+    body.className = "summary-body loading";
+    body.textContent = "Preparando el resumen a partir de las notas…";
+    $("summary-foot").textContent = "";
+    try {
+      const res = await api(`/crm/patients/${patientId}/summary`, { method: "POST" });
+      if (state.selectedPatientId !== patientId) return; // doctor moved on
+      body.className = "summary-body";
+      body.textContent = res.summary;
+      const when = new Date(res.generated_at).toLocaleString("es-DO", { dateStyle: "medium", timeStyle: "short" });
+      $("summary-foot").textContent = res.notes_count
+        ? `Generado con IA a partir de ${res.notes_count} nota(s) · ${when} · Verifica siempre con las notas originales.`
+        : "";
+    } catch (err) {
+      if (state.selectedPatientId !== patientId) return;
+      body.className = "summary-body error";
+      body.textContent = err.message || "No se pudo generar el resumen.";
+    } finally {
+      btn.disabled = false;
     }
   });
 
