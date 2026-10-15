@@ -110,6 +110,39 @@ def _add_note(
     return note
 
 
+def _seed_patient(
+    db,
+    tenant: Tenant,
+    *,
+    name: str,
+    phone: str,
+    therapist: str,
+    appointments: list[tuple[float, AppointmentStatus]],
+    notes: list[tuple[float, str, ClinicalNoteType, str]],
+    backdate_days: int = 60,
+    status: ContactStatus = ContactStatus.PATIENT,
+    reset: bool = True,
+) -> Contact:
+    """Data-driven demo patient: appointments are (days_from_now, status)
+    (negative = past) and notes are (days_ago, author, type, content).
+    Past appointments get a completed/no-show status as given; upcoming
+    ones are left SCHEDULED unless told otherwise."""
+    contact = _get_or_create_contact(
+        db, tenant, phone=phone, name=name, status=status, backdate_created_days=backdate_days
+    )
+    if reset:
+        # reset=False keeps a conversation seeded earlier for this contact.
+        _reset_demo_history(db, contact)
+    for days, appt_status in appointments:
+        appt = appointments_service.create_appointment(
+            db, tenant, contact, therapist_name=therapist, scheduled_at=_now() + timedelta(days=days)
+        )
+        appt.status = appt_status
+    for days_ago, author, note_type, content in notes:
+        _add_note(db, tenant, contact, days_ago=days_ago, author=author, note_type=note_type, content=content)
+    return contact
+
+
 def _seed_conversation(
     db,
     tenant: Tenant,
@@ -459,11 +492,118 @@ def seed() -> None:
             claimed_after_minutes=2,
         )
 
+        # ----- Más pacientes para que el CRM luzca lleno en la demo --------
+        # Todos ficticios. Cada uno con citas pasadas/próximas y notas.
+        S, C, D, X = (AppointmentStatus.SCHEDULED, AppointmentStatus.COMPLETED,
+                      AppointmentStatus.CONFIRMED, AppointmentStatus.NO_SHOW)
+        NOTE, REC = ClinicalNoteType.NOTE, ClinicalNoteType.RECOMMENDATION
+        MF, AS, LT = "María Fernanda Ruiz", "Andrés Salas", "Lucía Torres"
+
+        _seed_patient(
+            db, tenant, name="Sofía Martínez", phone="+18095550311", therapist=MF,
+            appointments=[(-40, C), (-26, C), (-12, C), (2, S)],
+            notes=[
+                (40, MF, NOTE, "Consulta de la madre por sospecha de TDAH en su hija (9 años): se distrae en clase, pierde útiles y le cuesta terminar tareas. Sin problemas de sueño. Se inicia evaluación."),
+                (26, MF, NOTE, "Aplicadas escalas a madre y maestra; coinciden en inatención en casa y escuela. Buen vínculo con la terapeuta. Se solicita informe escolar."),
+                (12, MF, REC, "Recomendaciones a la familia: rutina fija de tareas con temporizador, instrucciones de un paso a la vez y reforzar lo positivo de inmediato."),
+                (3, MF, NOTE, "Informe escolar recibido: confirma el patrón. Pendiente: devolución de resultados a la familia y plan con la escuela."),
+            ],
+        )
+        _seed_patient(
+            db, tenant, name="Luis Fernando Almonte", phone="+18295550322", therapist=AS,
+            appointments=[(-33, C), (-19, C), (-5, C), (4, S)],
+            notes=[
+                (33, AS, NOTE, "Niño de 6 años derivado por la escuela: poco contacto visual, juego repetitivo con carros alineados, molestia con el ruido del timbre. Evaluación del espectro en curso."),
+                (19, AS, NOTE, "Observación en sesión: responde a su nombre de forma intermitente, usa frases de 2-3 palabras. Comprensión buena. Se trabaja turnos de juego."),
+                (5, AS, REC, "Recomendación: apoyos visuales (secuencia de la mañana en imágenes), audífonos reductores de ruido en eventos y avisar los cambios con antelación."),
+            ],
+        )
+        _seed_patient(
+            db, tenant, name="Carmen Rosario", phone="+18495550333", therapist=LT,
+            appointments=[(-28, C), (-14, C), (1, D)],
+            notes=[
+                (28, LT, NOTE, "Adulta que consulta por ansiedad y dificultad para organizarse en el trabajo; sospecha de TDAH no diagnosticado de adulta. Motivada."),
+                (14, LT, NOTE, "Aplicada entrevista de historia del desarrollo. Refiere inquietud desde la infancia. Mejora leve del sueño con el registro semanal."),
+                (4, LT, REC, "Pautas: lista de tres prioridades al día, pausas activas cada hora y limitar cafeína después de las 2 p. m."),
+            ],
+        )
+        _seed_patient(
+            db, tenant, name="Pedro Jiménez", phone="+18095550344", therapist=MF,
+            appointments=[(-21, C), (-7, X), (3, S)],
+            notes=[
+                (21, MF, NOTE, "Niño de 8 años con dificultades de lectura y escritura (confunde letras, lectura lenta). Inteligencia verbal normal. Se descarta problema visual con oftalmólogo."),
+                (7, MF, NOTE, "No asistió a la última sesión; la madre avisó después por trabajo. Se ofrece horario de tarde."),
+            ],
+        )
+        _seed_patient(
+            db, tenant, name="Valentina Peña", phone="+18295550355", therapist=LT,
+            appointments=[(-45, C), (-31, C), (-17, C), (-3, C), (5, S)],
+            notes=[
+                (45, LT, NOTE, "Niña de 5 años con retraso del lenguaje expresivo y ansiedad de separación al entrar al salón. Buena comprensión."),
+                (31, LT, NOTE, "Incorpora 10 palabras nuevas por juego simbólico. Llora menos al despedirse de la madre."),
+                (17, LT, REC, "Leer cuentos con imágenes 15 minutos diarios, nombrar objetos del hogar y evitar corregir de forma directa."),
+                (3, LT, NOTE, "Frases de 3 palabras de forma espontánea. La maestra reporta mejor adaptación. Continuar con el plan actual."),
+            ],
+        )
+        _seed_patient(
+            db, tenant, name="Ramón Gómez", phone="+18495550366", therapist=AS,
+            appointments=[(-10, C), (6, S)],
+            notes=[
+                (10, AS, NOTE, "Primera consulta. Adolescente de 14 años con baja tolerancia a la frustración y conflictos en el aula. Se muestra reservado. Acuerdo de sesiones quincenales."),
+            ],
+        )
+        _seed_patient(
+            db, tenant, name="Isabela Núñez", phone="+18095550377", therapist=MF,
+            appointments=[(-35, C), (-21, C), (-9, X), (-2, X), (7, S)],
+            notes=[
+                (35, MF, NOTE, "Adolescente de 12 años con rasgos de ansiedad social y perfeccionismo. Evita exposiciones orales."),
+                (21, MF, REC, "Práctica gradual de exposición: empezar por hablar en grupos pequeños; respiración lenta antes de participar."),
+                (2, MF, NOTE, "Segunda ausencia consecutiva sin aviso. Pendiente: llamar a la familia para revisar si el horario o la motivación son el problema."),
+            ],
+        )
+        _seed_patient(
+            db, tenant, name="Andrés Castillo", phone="+18295550388", therapist=LT,
+            appointments=[(-8, C), (8, S)],
+            notes=[
+                (8, LT, NOTE, "Adulto joven (22 años) con diagnóstico previo de TEA nivel 1; busca apoyo para la transición al trabajo. Buen nivel verbal, rigidez ante cambios de horario."),
+            ],
+        )
+        _seed_patient(
+            db, tenant, name="Marisol Ureña", phone="+18495550399", therapist=AS,
+            appointments=[(-50, C), (-36, C), (-22, C), (-8, C), (2, D)],
+            notes=[
+                (50, AS, NOTE, "Madre consulta por berrinches intensos de su hijo (4 años) y dificultad para cambios de actividad."),
+                (36, AS, REC, "Pautas de crianza: anticipar transiciones, ofrecer dos opciones, validar la emoción antes de poner el límite."),
+                (22, AS, NOTE, "Reducción de berrinches de 5 a 2 por semana. La madre refiere cansancio; se refuerza su autocuidado."),
+                (8, AS, NOTE, "Continúa mejoría. Se planea espaciar las sesiones a cada tres semanas si se mantiene."),
+            ],
+        )
+        _seed_patient(
+            db, tenant, name="Héctor Batista", phone="+18095550410", therapist=LT,
+            appointments=[(-15, C), (6, S)],
+            notes=[
+                (15, LT, NOTE, "Evaluación inicial de hijo de 10 años por bajo rendimiento y distracción. Se solicita informe del colegio y examen auditivo."),
+            ],
+            status=ContactStatus.PATIENT,
+        )
+
+        # Daniela (ya tenía conversación) ahora con historial clínico también.
+        _seed_patient(
+            db, tenant, name="Daniela Cruz", phone="+18495550256", therapist=MF,
+            appointments=[(-30, C), (-16, C), (-2, C), (5, S)],
+            reset=False,
+            notes=[
+                (30, MF, NOTE, "Consulta por dificultad de atención sostenida y olvidos frecuentes. Evaluación de funciones ejecutivas iniciada."),
+                (16, MF, NOTE, "Resultados preliminares: atención dividida por debajo de lo esperado. Se descarta influencia del sueño por ahora."),
+                (2, MF, REC, "Usar recordatorios en el teléfono, dividir proyectos grandes en pasos y revisar la lista cada noche."),
+            ],
+        )
+
         db.commit()
         print(
             "Datos de demo listos (CRM + dashboard): Wanda Pérez, Carlos Méndez, "
             "Rosa Difo, Yolanda Ramírez, Julián Objio, Ana Beltrán, Miguel Reyes, "
-            "Daniela Cruz, Esteban Paulino."
+            "Daniela Cruz, Esteban Paulino + 9 pacientes más con citas y notas."
         )
     finally:
         db.close()
