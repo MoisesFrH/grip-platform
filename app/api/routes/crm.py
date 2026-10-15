@@ -501,18 +501,18 @@ def create_note_route(
     )
 
 
-class PatientSummaryOut(BaseModel):
+class AiSummaryOut(BaseModel):
     summary: str
     generated_at: str
     notes_count: int
 
 
-@router.post("/patients/{contact_id}/summary", response_model=PatientSummaryOut)
+@router.post("/patients/{contact_id}/summary", response_model=AiSummaryOut)
 def patient_summary_route(
     contact_id: str,
     staff: Staff = Depends(require_doctor),
     db: Session = Depends(get_db),
-) -> PatientSummaryOut:
+) -> AiSummaryOut:
     """On-demand AI summary of a patient's notes. Doctor-only, never
     automatic, nothing is stored. See app/services/patient_summary.py for
     what is (and is not) sent to the model."""
@@ -524,7 +524,7 @@ def patient_summary_route(
         raise HTTPException(status_code=503, detail="El resumen con IA no está configurado (falta GEMINI_API_KEY).")
     except patient_summary.SummaryGenerationError:
         raise HTTPException(status_code=502, detail="No se pudo generar el resumen ahora mismo. Intenta de nuevo en un momento.")
-    return PatientSummaryOut(
+    return AiSummaryOut(
         summary=result.summary,
         generated_at=result.generated_at.isoformat(),
         notes_count=result.notes_count,
