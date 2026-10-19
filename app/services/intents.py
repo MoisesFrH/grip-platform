@@ -3,11 +3,11 @@ Intent taxonomy from architecture doc §6 — the table there is the single
 source of truth for category, priority and handoff behaviour; this module
 is its code form, not a reinterpretation of it.
 """
-
+ 
 import enum
 from dataclasses import dataclass
-
-
+ 
+ 
 class Intent(str, enum.Enum):
     # Category A — bot answers automatically via a grounded Gemini tool call.
     GENERAL_INFO = "GENERAL_INFO"
@@ -19,44 +19,45 @@ class Intent(str, enum.Enum):
     FIRST_APPOINTMENT = "FIRST_APPOINTMENT"
     EVALUATIONS = "EVALUATIONS"
     PAYMENT_INFO = "PAYMENT_INFO"
-
+ 
     # Category B — bot collects data, then creates an administrative task/handoff.
     PAYMENT_ISSUE = "PAYMENT_ISSUE"
     APPOINTMENT_CHANGE = "APPOINTMENT_CHANGE"
     APPOINTMENT_CANCEL = "APPOINTMENT_CANCEL"
     APPOINTMENT_PROBLEM = "APPOINTMENT_PROBLEM"
-
+    NEW_PATIENT_INQUIRY = "NEW_PATIENT_INQUIRY"
+ 
     # Category C — no automatic resolution attempt; always a human handoff.
     CLINICAL_QUESTION = "CLINICAL_QUESTION"
     SAFETY_RISK = "SAFETY_RISK"
     HUMAN_REQUEST = "HUMAN_REQUEST"
-
+ 
     # Neither A, B nor C — could not be classified even after Gemini
     # disambiguation; one clarifying retry, then handoff.
     OTHER_UNCLEAR = "OTHER_UNCLEAR"
-
-
+ 
+ 
 class IntentCategory(str, enum.Enum):
     A = "A"
     B = "B"
     C = "C"
     UNCLEAR = "UNCLEAR"
-
-
+ 
+ 
 class IntentPriority(str, enum.Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
     CRITICAL = "CRITICAL"
-
-
+ 
+ 
 @dataclass(frozen=True)
 class IntentMeta:
     category: IntentCategory
     priority: IntentPriority
     requires_handoff: bool
-
-
+ 
+ 
 INTENT_METADATA: dict[Intent, IntentMeta] = {
     Intent.GENERAL_INFO: IntentMeta(IntentCategory.A, IntentPriority.LOW, False),
     Intent.LOCATION: IntentMeta(IntentCategory.A, IntentPriority.LOW, False),
@@ -71,12 +72,13 @@ INTENT_METADATA: dict[Intent, IntentMeta] = {
     Intent.APPOINTMENT_CHANGE: IntentMeta(IntentCategory.B, IntentPriority.MEDIUM, True),
     Intent.APPOINTMENT_CANCEL: IntentMeta(IntentCategory.B, IntentPriority.MEDIUM, True),
     Intent.APPOINTMENT_PROBLEM: IntentMeta(IntentCategory.B, IntentPriority.MEDIUM, True),
+    Intent.NEW_PATIENT_INQUIRY: IntentMeta(IntentCategory.B, IntentPriority.MEDIUM, True),
     Intent.CLINICAL_QUESTION: IntentMeta(IntentCategory.C, IntentPriority.HIGH, True),
     Intent.SAFETY_RISK: IntentMeta(IntentCategory.C, IntentPriority.CRITICAL, True),
     Intent.HUMAN_REQUEST: IntentMeta(IntentCategory.C, IntentPriority.MEDIUM, True),
     Intent.OTHER_UNCLEAR: IntentMeta(IntentCategory.UNCLEAR, IntentPriority.LOW, True),
 }
-
+ 
 # The intents a deterministic keyword pass and Gemini disambiguation are
 # ever allowed to land on. CLINICAL_QUESTION and SAFETY_RISK are
 # deliberately excluded — those are only ever set by the safety layer

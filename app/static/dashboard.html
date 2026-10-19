@@ -22,21 +22,21 @@
     --on-primary-container: #dce4ff;
     --primary-fixed: #dce4ff;
     --primary-fixed-dim: #b6c4ff;
-
+ 
     --secondary: #e87722;
     --on-secondary: #ffffff;
     --secondary-container: #ffb68b;
     --secondary-fixed: #ffdbc8;
-
+ 
     --tertiary: #c95e0e;
     --on-tertiary: #ffffff;
     --tertiary-container: #e87722;
     --tertiary-fixed: #ffe4cf;
-
+ 
     --error: #ba1a1a;
     --error-container: #ffdad6;
     --on-error-container: #93000a;
-
+ 
     --background: #faf9f7;
     --on-background: #1a1c1b;
     --surface: #faf9f7;
@@ -52,7 +52,7 @@
     --outline: #707973;
     --outline-variant: #bfc9c1;
   }
-
+ 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
@@ -67,7 +67,7 @@
     line-height: 1;
     vertical-align: middle;
   }
-
+ 
   /* ---------- header ---------- */
   header {
     position: sticky;
@@ -114,7 +114,7 @@
   .brand-text { display: flex; flex-direction: column; line-height: 1.2; }
   .brand-text .name { font-weight: 700; font-size: 1rem; color: var(--primary); letter-spacing: -0.01em; }
   .brand-text .sub { font-size: 0.72rem; color: var(--on-surface-variant); }
-
+ 
   .header-right {
     display: flex;
     align-items: center;
@@ -135,7 +135,7 @@
   .badge-pill .dot {
     width: 6px; height: 6px; border-radius: 50%; background: var(--primary-fixed-dim);
   }
-
+ 
   .period-select {
     display: flex;
     align-items: center;
@@ -154,7 +154,7 @@
     cursor: pointer;
   }
   .period-select select:focus { outline: none; }
-
+ 
   .header-sub {
     display: flex;
     align-items: baseline;
@@ -163,7 +163,7 @@
   }
   .header-sub h1 { font-size: 1.15rem; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
   .header-sub .loc { font-size: 0.82rem; color: var(--on-surface-variant); }
-
+ 
   /* ---------- layout ---------- */
   main {
     max-width: 1240px;
@@ -173,7 +173,7 @@
     flex-direction: column;
     gap: 18px;
   }
-
+ 
   .metrics-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -225,7 +225,7 @@
     background: var(--surface-container-low);
     border-radius: 0 0 18px 18px;
   }
-
+ 
   .metric-card.primary .value { color: var(--primary); }
   .metric-card.primary .metric-icon { background: rgba(220, 228, 255, 0.7); color: var(--primary); }
   .metric-card.secondary .value { color: var(--secondary); }
@@ -240,7 +240,7 @@
     background: rgba(255, 228, 207, 0.45);
     filter: blur(6px);
   }
-
+ 
   .panel {
     background: var(--surface-container-lowest);
     border-radius: 18px;
@@ -257,7 +257,7 @@
   .panel-head .material-symbols-outlined { color: var(--primary); font-size: 18px; }
   .panel-head h2 { font-size: 0.95rem; margin: 0; font-weight: 700; color: var(--on-surface); }
   .panel-head .count { font-size: 0.78rem; color: var(--on-surface-variant); }
-
+ 
   .two-col {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -266,7 +266,7 @@
   @media (max-width: 760px) {
     .two-col { grid-template-columns: 1fr; }
   }
-
+ 
   /* segmented status bar — same glossy/rounded language as the daily bar
      chart: a soft gradient sheen on each segment, a bit taller, and a
      hover lift so it doesn't read as a flat row of paint chips */
@@ -284,7 +284,7 @@
   .segbar .seg:hover { filter: brightness(1.08); transform: scaleY(1.12); z-index: 2; }
   .segbar .seg:first-child { border-radius: 999px 0 0 999px; }
   .segbar .seg:last-child { border-radius: 0 999px 999px 0; }
-
+ 
   .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .legend-chip {
     display: flex; align-items: center; gap: 8px;
@@ -299,7 +299,7 @@
   .legend-chip .sw { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 3px rgba(29, 51, 117, 0.06); }
   .legend-chip .n { font-weight: 700; }
   .legend-chip .s { color: var(--on-surface-variant); font-size: 0.74rem; }
-
+ 
   /* daily bar chart — gridlines behind, rounded gradient bars, value shown
      on hover instead of always-on, so it reads as one clean shape rather
      than a row of flat rectangles */
@@ -316,7 +316,7 @@
     font-size: 0.6rem; color: var(--outline);
     background: var(--surface-container-lowest); padding-right: 5px;
   }
-
+ 
   .bar-chart { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 10px; height: 160px; padding-top: 6px; }
   .bar-chart .bar-col { flex: 1; max-width: 46px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 10px; cursor: pointer; }
   .bar-chart .bar-count {
@@ -327,7 +327,7 @@
   .bar-chart .bar-col:hover .bar-count { opacity: 1; transform: translateY(0); }
   .bar-chart .bar-label { font-size: 0.64rem; color: var(--on-surface-variant); margin-top: 8px; white-space: nowrap; font-weight: 500; }
   .bar-chart .bar-col:hover .bar-label { color: var(--on-surface); font-weight: 700; }
-
+ 
   /* stacked daily bar chart (bot-only vs escalated) */
   .bar-chart .bar-stack {
     width: 100%; display: flex; flex-direction: column-reverse;
@@ -341,7 +341,7 @@
   .chart-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 0.76rem; color: var(--on-surface-variant); }
   .chart-legend .item { display: flex; align-items: center; gap: 6px; }
   .chart-legend .sw { width: 10px; height: 10px; border-radius: 3px; }
-
+ 
   /* reminder log table */
   /* small metric row (no-show, time-to-claim, new vs returning) */
   .mini-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
@@ -349,7 +349,7 @@
   .mini-stat .n { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
   .mini-stat .n.tertiary-text { color: var(--tertiary); }
   .mini-stat .l { font-size: 0.74rem; color: var(--on-surface-variant); margin-top: 2px; }
-
+ 
   /* small vertical bar chart for hour/weekday volume, no counts/labels per bar */
   /* mini bar chart (hour/weekday volume) — same gridline + gradient +
      hover-reveal language as the main daily chart, just more compact */
@@ -361,7 +361,7 @@
   }
   .mini-bar-chart-grid .gline { border-top: 1px dashed var(--surface-container-highest); }
   .mini-bar-chart-grid .gline:last-child { border-top: 1px solid var(--surface-container-highest); }
-
+ 
   .mini-bar-chart { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 3px; height: 70px; }
   .mini-bar-chart .mbc-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 4px; cursor: pointer; }
   .mini-bar-chart .mbc-value {
@@ -378,7 +378,7 @@
   .mini-bar-chart .mbc-col:hover .mbc-bar { transform: translateY(-2px); filter: brightness(1.06); }
   .mini-bar-chart-labels { display: flex; gap: 3px; margin-top: 4px; }
   .mini-bar-chart-labels span { flex: 1; text-align: center; font-size: 0.58rem; color: var(--on-surface-variant); min-width: 4px; }
-
+ 
   .reminder-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
   .reminder-table th {
     text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em;
@@ -394,7 +394,7 @@
   .status-tag.warn { background: rgba(255, 228, 207, 0.85); color: var(--tertiary); }
   .status-tag.pending { background: var(--surface-container-high); color: var(--on-surface-variant); }
   .table-scroll { overflow-x: auto; }
-
+ 
   .hbar-row {
     display: grid; grid-template-columns: 150px 1fr 40px; align-items: center; gap: 10px;
     font-size: 0.82rem; margin-bottom: 8px; padding: 3px 4px; border-radius: 10px;
@@ -413,10 +413,10 @@
   .hbar-row:hover .hbar-fill { filter: brightness(1.08); }
   .hbar-row .count { text-align: right; color: var(--on-surface-variant); font-size: 0.78rem; }
   .hbar-row:hover .count { color: var(--on-surface); font-weight: 700; }
-
+ 
   .empty-note { color: var(--on-surface-variant); font-size: 0.85rem; padding: 10px 0; }
   .loading { text-align: center; color: var(--on-surface-variant); padding: 60px 20px; }
-
+ 
   footer {
     max-width: 1240px;
     margin: 0 auto;
@@ -432,7 +432,7 @@
 <link href="/assets/glass.css" rel="stylesheet" />
 </head>
 <body>
-
+ 
 <header>
   <div class="header-inner">
     <div class="header-top">
@@ -461,19 +461,19 @@
     </div>
   </div>
 </header>
-
+ 
 <main id="main-content">
   <div class="loading">Cargando métricas…</div>
 </main>
-
+ 
 <footer>
   <span class="material-symbols-outlined">shield</span>
   Este panel muestra únicamente conteos y categorías — nunca el contenido de las conversaciones de los pacientes.
 </footer>
-
+ 
 <script>
 const TENANT_SLUG = "grip";
-
+ 
 const INTENT_LABELS_ES = {
   GENERAL_INFO: "Información general",
   LOCATION: "Ubicación",
@@ -488,13 +488,14 @@ const INTENT_LABELS_ES = {
   APPOINTMENT_CHANGE: "Cambio de cita",
   APPOINTMENT_CANCEL: "Cancelar cita",
   APPOINTMENT_PROBLEM: "Problema con una cita",
+  NEW_PATIENT_INQUIRY: "Nuevo paciente",
   APPOINTMENT_REMINDER_REPLY: "Respuesta a recordatorio de cita",
   CLINICAL_QUESTION: "Pregunta clínica",
   SAFETY_RISK: "Riesgo / seguridad",
   HUMAN_REQUEST: "Pidió hablar con humano",
   OTHER_UNCLEAR: "No identificado",
 };
-
+ 
 const STATUS_LABELS_ES = {
   BOT_ACTIVE: "Bot activo",
   WAITING_FOR_PATIENT: "Esperando paciente",
@@ -504,7 +505,7 @@ const STATUS_LABELS_ES = {
   BOT_RESUMED: "Bot reanudado",
   CLOSED: "Cerrado",
 };
-
+ 
 // Blue family = bot handling it, orange family = a human is (or was) involved,
 // gray = closed — so the color alone hints at who's driving the conversation.
 const STATUS_COLORS = {
@@ -516,14 +517,14 @@ const STATUS_COLORS = {
   BOT_RESUMED: "#7c8fc9",
   CLOSED: "#bfc9c1",
 };
-
+ 
 const PRIORITY_LABELS_ES = {
   CRITICAL: "Crítica",
   HIGH: "Alta",
   MEDIUM: "Media",
   LOW: "Baja",
 };
-
+ 
 const SAFETY_CATEGORY_LABELS_ES = {
   SUICIDE_OR_SELF_HARM: "Suicidio / autolesión",
   IMMEDIATE_RISK: "Riesgo inmediato",
@@ -534,7 +535,7 @@ const SAFETY_CATEGORY_LABELS_ES = {
   MEDICATION: "Medicación",
   CLINICAL_OTHER: "Otro tema clínico",
 };
-
+ 
 const APPOINTMENT_STATUS_LABELS_ES = {
   SCHEDULED: "Agendada",
   CONFIRMED: "Confirmada",
@@ -543,40 +544,40 @@ const APPOINTMENT_STATUS_LABELS_ES = {
   COMPLETED: "Completada",
   NO_SHOW: "No se presentó",
 };
-
+ 
 const REMINDER_RESPONSE_LABELS_ES = {
   CONFIRMED: "Confirmó",
   CANCEL_OR_RESCHEDULE: "Canceló / pidió cambio",
   NO_RESPONSE: "Sin respuesta",
 };
-
+ 
 function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text == null ? "" : String(text);
   return div.innerHTML;
 }
-
+ 
 async function fetchSummary(days) {
   const res = await fetch(`/dashboard/api/summary?tenant_slug=${TENANT_SLUG}&days=${days}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
-
+ 
 async function fetchReminders(days) {
   const res = await fetch(`/dashboard/api/reminders?tenant_slug=${TENANT_SLUG}&days=${days}&limit=50`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
-
+ 
 async function fetchPatients() {
   const res = await fetch(`/dashboard/api/patients?tenant_slug=${TENANT_SLUG}&limit=200`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
-
+ 
 const WEEKDAY_LABELS_ES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]; // index 0 = Sunday, matches Postgres extract(dow)
 const HOUR_LABELS = Array.from({ length: 24 }, (_, h) => (h % 3 === 0 ? String(h) : ""));
-
+ 
 function renderMiniBarChart(values, labels) {
   const rawMax = Math.max(...values, 1);
   const niceMax = Math.max(Math.ceil(rawMax / 4) * 4, 4);
@@ -599,7 +600,7 @@ function renderMiniBarChart(values, labels) {
     </div>
     <div class="mini-bar-chart-labels">${labelRow}</div>`;
 }
-
+ 
 function renderPatientsTable(patients) {
   if (patients.length === 0) {
     return `<div class="empty-note">Todavía no hay pacientes registrados.</div>`;
@@ -626,7 +627,7 @@ function renderPatientsTable(patients) {
       </table>
     </div>`;
 }
-
+ 
 function renderStackedBarChart(byDay) {
   if (byDay.length === 0) {
     return `<div class="empty-note">Sin conversaciones nuevas en este periodo.</div>`;
@@ -666,7 +667,7 @@ function renderStackedBarChart(byDay) {
       <span class="item"><span class="sw" style="background:var(--tertiary-container)"></span> Transferida a un humano</span>
     </div>`;
 }
-
+ 
 function renderRemindersTable(reminders) {
   if (reminders.length === 0) {
     return `<div class="empty-note">No se han enviado recordatorios en este periodo.</div>`;
@@ -697,7 +698,7 @@ function renderRemindersTable(reminders) {
       </table>
     </div>`;
 }
-
+ 
 function renderHBars(rows, labelMap, opts) {
   opts = opts || {};
   if (rows.length === 0) {
@@ -718,7 +719,7 @@ function renderHBars(rows, labelMap, opts) {
     })
     .join("");
 }
-
+ 
 function renderStatusBreakdown(byStatus, totalActive) {
   const entries = Object.entries(byStatus).filter(([, count]) => count > 0);
   if (entries.length === 0) {
@@ -747,16 +748,16 @@ function renderStatusBreakdown(byStatus, totalActive) {
     .join("");
   return `<div class="segbar">${segs}</div><div class="legend">${chips}</div>`;
 }
-
+ 
 function render(data, reminders, patients) {
   const main = document.getElementById("main-content");
-
+ 
   const conv = data.conversations;
   const handoff = data.handoff;
   const intents = data.top_intents;
   const safety = data.safety;
   const appointments = data.appointments;
-
+ 
   const intentRows = intents.map((i) => ({ key: i.intent, count: i.count }));
   const handoffPriorityRows = Object.entries(handoff.by_priority)
     .filter(([, v]) => v > 0)
@@ -771,9 +772,9 @@ function render(data, reminders, patients) {
   const reminderResponseRows = Object.entries(appointments.by_reminder_response)
     .filter(([, v]) => v > 0)
     .map(([k, v]) => ({ key: k, count: v }));
-
+ 
   const totalActive = Object.values(conv.by_status).reduce((a, b) => a + b, 0);
-
+ 
   main.innerHTML = `
     <div class="metrics-row">
       <div class="metric-card primary">
@@ -787,7 +788,7 @@ function render(data, reminders, patients) {
         <div class="value">${conv.total_new}</div>
         <div class="footnote">Últimos ${data.period_days} días</div>
       </div>
-
+ 
       <div class="metric-card secondary">
         <div class="top">
           <div>
@@ -799,7 +800,7 @@ function render(data, reminders, patients) {
         <div class="value">${Math.round(handoff.rate * 100)}%</div>
         <div class="footnote">${handoff.handed_off} de ${handoff.total_conversations} conversaciones</div>
       </div>
-
+ 
       <div class="metric-card tertiary">
         <div class="top">
           <div>
@@ -812,7 +813,7 @@ function render(data, reminders, patients) {
         <div class="footnote">Riesgo/seguridad + preguntas clínicas, últimos ${data.period_days} días</div>
       </div>
     </div>
-
+ 
     <div class="panel">
       <div class="panel-head">
         <span class="material-symbols-outlined">pie_chart</span>
@@ -821,7 +822,7 @@ function render(data, reminders, patients) {
       </div>
       ${renderStatusBreakdown(conv.by_status, totalActive)}
     </div>
-
+ 
     <div class="panel">
       <div class="panel-head">
         <span class="material-symbols-outlined">show_chart</span>
@@ -830,7 +831,7 @@ function render(data, reminders, patients) {
       </div>
       ${renderStackedBarChart(data.conversations_by_outcome)}
     </div>
-
+ 
     <div class="panel">
       <div class="panel-head">
         <span class="material-symbols-outlined">insights</span>
@@ -851,7 +852,7 @@ function render(data, reminders, patients) {
         </div>
       </div>
     </div>
-
+ 
     <div class="two-col">
       <div class="panel">
         <div class="panel-head">
@@ -869,7 +870,7 @@ function render(data, reminders, patients) {
         ${renderMiniBarChart(data.volume_by_time.by_weekday, WEEKDAY_LABELS_ES)}
       </div>
     </div>
-
+ 
     <div class="two-col">
       <div class="panel">
         <div class="panel-head">
@@ -878,7 +879,7 @@ function render(data, reminders, patients) {
         </div>
         ${renderHBars(intentRows, INTENT_LABELS_ES)}
       </div>
-
+ 
       <div class="panel">
         <div class="panel-head">
           <span class="material-symbols-outlined">support_agent</span>
@@ -887,7 +888,7 @@ function render(data, reminders, patients) {
         ${renderHBars(handoffPriorityRows, PRIORITY_LABELS_ES)}
       </div>
     </div>
-
+ 
     <div class="panel">
       <div class="panel-head">
         <span class="material-symbols-outlined" style="color: var(--tertiary)">emergency</span>
@@ -904,7 +905,7 @@ function render(data, reminders, patients) {
         </div>
       </div>
     </div>
-
+ 
     <div class="two-col">
       <div class="panel">
         <div class="panel-head">
@@ -914,7 +915,7 @@ function render(data, reminders, patients) {
         </div>
         ${renderHBars(appointmentStatusRows, APPOINTMENT_STATUS_LABELS_ES)}
       </div>
-
+ 
       <div class="panel">
         <div class="panel-head">
           <span class="material-symbols-outlined">mark_chat_read</span>
@@ -924,7 +925,7 @@ function render(data, reminders, patients) {
         ${renderHBars(reminderResponseRows, REMINDER_RESPONSE_LABELS_ES)}
       </div>
     </div>
-
+ 
     <div class="panel">
       <div class="panel-head">
         <span class="material-symbols-outlined">notifications_active</span>
@@ -933,7 +934,7 @@ function render(data, reminders, patients) {
       </div>
       ${renderRemindersTable(reminders)}
     </div>
-
+ 
     <div class="panel">
       <div class="panel-head">
         <span class="material-symbols-outlined">groups</span>
@@ -944,7 +945,7 @@ function render(data, reminders, patients) {
     </div>
   `;
 }
-
+ 
 async function loadAndRender() {
   const days = document.getElementById("period-select").value;
   const main = document.getElementById("main-content");
@@ -956,10 +957,10 @@ async function loadAndRender() {
     main.innerHTML = `<div class="empty-note">No se pudieron cargar las métricas: ${escapeHtml(e.message)}</div>`;
   }
 }
-
+ 
 document.getElementById("period-select").addEventListener("change", loadAndRender);
 loadAndRender();
 </script>
-
+ 
 </body>
 </html>

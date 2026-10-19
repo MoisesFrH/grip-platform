@@ -3,7 +3,7 @@ The complete, closed set of functions Gemini is allowed to call (architecture
 doc §9). Nothing else exists as a tool: there is no update_appointment,
 no send_message, no anything that mutates data or reaches outside a single
 tenant's own read-only config. Every function here:
-
+ 
   - takes only `tenant` (plus optional filters the caller supplies) and
     returns plain structured data — it never returns prose;
   - reads exclusively from TENANT_CONFIG via app.services.tenant_config,
@@ -12,34 +12,43 @@ tenant's own read-only config. Every function here:
   - returns an explicit {"configured": False} shape when the tenant hasn't
     set that section up, so the model is grounded into saying "no tengo
     ese dato" instead of inventing one.
-
+ 
 Adding a new capability means adding a function + schema pair here and
 registering it in INTENT_TOOL_MAP — never widening what an existing
 intent's tool set can do implicitly.
 """
-
+ 
 from typing import Any, Callable
-
+ 
 from app.models.tenant import Tenant
 from app.services import tenant_config as cfg
-
+ 
 ToolFn = Callable[..., dict[str, Any]]
-
-
+ 
+ 
 def get_general_info(tenant: Tenant) -> dict:
     info = cfg.get_general_info_config(tenant)
     return {"configured": info.get("description") is not None, **info}
-
-
+ 
+ 
 def get_location(tenant: Tenant) -> dict:
     return cfg.get_location_config(tenant)
-
-
+ 
+ 
 def get_services(tenant: Tenant) -> dict:
     services = cfg.get_services_config(tenant)
-    return {"configured": bool(services), "services": services}
-
-
+    result = {"configured": bool(services), "services": services}
+    if services and (tenant.config or {}).get("intake", {}).get("enabled"):
+        # Registration is never done by the bot: say so, and point to the
+        # intake flow (triggered by phrases like "quiero una cita").
+        result["registration_note"] = (
+            "El registro lo realiza una persona del equipo, no el asistente. Si la persona "
+            "quiere iniciar terapia o evaluación, invítala a escribir 'quiero una cita' para "
+            "dejar su solicitud con el equipo."
+        )
+    return result
+ 
+ 
 def get_therapists(tenant: Tenant) -> dict:
     therapists = cfg.get_therapists_config(tenant)
     # Strip the availability field here: THERAPISTS intent answers "who do
@@ -50,13 +59,13 @@ def get_therapists(tenant: Tenant) -> dict:
         {k: v for k, v in t.items() if k != "availability"} for t in therapists
     ]
     return {"configured": bool(therapists), "therapists": public_fields}
-
-
+ 
+ 
 def get_therapist_availability(tenant: Tenant, therapist_name: str | None = None) -> dict:
     """
     Returns the availability semaphore already computed by the backend
     (architecture doc §10/§14 — the color is never decided by the LLM).
-
+ 
     For the MVP, before the real availability-calculation service exists,
     the semaphore is a static value maintained in TENANT_CONFIG by staff;
     this function is the single seam that later gets swapped to call the
@@ -65,13 +74,13 @@ def get_therapist_availability(tenant: Tenant, therapist_name: str | None = None
     therapists = cfg.get_therapists_config(tenant)
     if not therapists:
         return {"configured": False, "therapists": []}
-
+ 
     if therapist_name:
         matches = [t for t in therapists if t.get("name", "").lower() == therapist_name.lower()]
         if not matches:
             return {"configured": True, "found": False, "therapists": []}
         therapists = matches
-
+ 
     return {
         "configured": True,
         "found": True,
@@ -84,25 +93,25 @@ def get_therapist_availability(tenant: Tenant, therapist_name: str | None = None
             for t in therapists
         ],
     }
-
-
+ 
+ 
 def get_booking_instructions(tenant: Tenant) -> dict:
     return cfg.get_booking_config(tenant)
-
-
+ 
+ 
 def get_first_appointment_guidelines(tenant: Tenant) -> dict:
     return cfg.get_first_appointment_config(tenant)
-
-
+ 
+ 
 def get_evaluations(tenant: Tenant) -> dict:
     evaluations = cfg.get_evaluations_config(tenant)
     return {"configured": bool(evaluations), "evaluations": evaluations}
-
-
+ 
+ 
 def get_payment_info(tenant: Tenant) -> dict:
     return cfg.get_payment_config(tenant)
-
-
+ 
+ 
 TOOL_FUNCTIONS: dict[str, ToolFn] = {
     "get_general_info": get_general_info,
     "get_location": get_location,
@@ -114,7 +123,7 @@ TOOL_FUNCTIONS: dict[str, ToolFn] = {
     "get_evaluations": get_evaluations,
     "get_payment_info": get_payment_info,
 }
-
+ 
 # JSON-schema function declarations, in the shape the Gemini API expects
 # (types.Tool(function_declarations=[...])). Kept as plain dicts so this
 # module has no hard dependency on the google-genai SDK types.
@@ -176,7 +185,7 @@ TOOL_SCHEMAS: dict[str, dict] = {
         "parameters": {"type": "object", "properties": {}},
     },
 }
-
+ 
 # Category-A intents only (architecture doc §6): the automation categories
 # B and C never reach Gemini for free generation at all, so they are not
 # represented here. An intent not in this map gets an empty tool list,
@@ -192,8 +201,8 @@ INTENT_TOOL_MAP: dict[str, list[str]] = {
     "EVALUATIONS": ["get_evaluations"],
     "PAYMENT_INFO": ["get_payment_info"],
 }
-
-
+ 
+ 
 def run_tool(name: str, tenant: Tenant, **kwargs) -> dict:
     if name not in TOOL_FUNCTIONS:
         # Defensive: should be unreachable, since the model is restricted to

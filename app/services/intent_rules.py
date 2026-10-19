@@ -3,21 +3,21 @@ Deterministic first pass of the hybrid classifier (architecture doc §6).
 Cheap, fast, no API call — this alone resolves the common case. Only when
 it comes back empty or ambiguous does the classifier reach for Gemini
 (app/services/intent_classifier.py).
-
+ 
 Deliberately excludes CLINICAL_QUESTION and SAFETY_RISK: those categories
 are owned entirely by app/services/safety.py, which runs first and wins
 outright when it fires (see intents.CLASSIFIABLE_INTENTS).
-
+ 
 Non-exhaustive by design — a tenant with different vocabulary (a
 restaurant, a hotel) gets its own keyword set later via TENANT_CONFIG,
 the same extensibility pattern used in safety.py.
 """
-
+ 
 from dataclasses import dataclass
-
+ 
 from app.services.intents import Intent
 from app.services.text_utils import compile_keyword_pattern, normalize
-
+ 
 DEFAULT_KEYWORDS: dict[Intent, list[str]] = {
     Intent.GENERAL_INFO: [
         "informacion general", "que es nd", "que es nd neurodiversa", "que es neurodiversa",
@@ -30,6 +30,8 @@ DEFAULT_KEYWORDS: dict[Intent, list[str]] = {
     ],
     Intent.SERVICES: [
         "que servicios", "servicios ofrecen", "que servicios tienen", "que ofrecen",
+        "que terapias", "tipos de terapia", "que tipo de terapias", "que atienden",
+        "ofrecen terapia", "dan terapia", "hacen evaluaciones", "acompanamiento familiar",
     ],
     Intent.THERAPISTS: [
         "que terapeutas", "quienes son los terapeutas", "que psicologos tienen",
@@ -65,6 +67,13 @@ DEFAULT_KEYWORDS: dict[Intent, list[str]] = {
     Intent.APPOINTMENT_CANCEL: [
         "cancelar mi cita", "anular la cita", "ya no puedo ir a mi cita", "cancelar la consulta",
     ],
+    Intent.NEW_PATIENT_INQUIRY: [
+        "quiero una cita", "quisiera una cita", "necesito una cita", "quiero agendar",
+        "quiero terapia", "necesito terapia", "busco terapia", "quisiera terapia",
+        "quiero inscribir", "quiero registrar", "quiero una evaluacion", "necesito una evaluacion",
+        "quiero iniciar terapia", "quiero empezar terapia", "como puedo recibir terapia",
+        "quiero consulta", "quiero una consulta", "necesito una consulta",
+    ],
     Intent.APPOINTMENT_PROBLEM: [
         "problema con mi reserva", "no me aparece la cita", "error al reservar",
         "no me llego la confirmacion de la cita",
@@ -74,14 +83,14 @@ DEFAULT_KEYWORDS: dict[Intent, list[str]] = {
         "atencion humana", "hablar con alguien del equipo", "pasame con una persona",
     ],
 }
-
-
+ 
+ 
 @dataclass
 class DeterministicMatch:
     intent: Intent
     matched_terms: list[str]
-
-
+ 
+ 
 def deterministic_candidates(text: str) -> list[DeterministicMatch]:
     """Returns every intent whose keywords matched, in no particular
     order. Zero results = genuinely unclear; more than one = ambiguous
@@ -89,14 +98,15 @@ def deterministic_candidates(text: str) -> list[DeterministicMatch]:
     Either case is handed to Gemini for disambiguation by the caller."""
     if not text or not text.strip():
         return []
-
+ 
     normalized = normalize(text)
     matches: list[DeterministicMatch] = []
-
+ 
     for intent, keywords in DEFAULT_KEYWORDS.items():
         pattern = compile_keyword_pattern(keywords)
         found = pattern.findall(normalized)
         if found:
             matches.append(DeterministicMatch(intent=intent, matched_terms=sorted(set(found))))
-
+ 
     return matches
+ 

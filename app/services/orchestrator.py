@@ -1,8 +1,8 @@
 """
 The channel-agnostic pipeline: one inbound message in, one outcome out.
-
+ 
     contact -> conversation -> safety+intent -> route -> reply / handoff
-
+ 
 This is deliberately the ONLY module that wires together crm,
 conversation_state, intent_classifier, safety_protocol and gemini_client —
 every other module stays focused on its own piece. A future Twilio webhook
@@ -10,25 +10,25 @@ handler (or, today, the /simulator routes) is a thin adapter: extract
 (tenant, phone, body) from wherever the message came from, call
 `process_inbound_message`, send `reply_text` back through that same
 channel if it isn't None.
-
+ 
 Does not commit the DB session — the caller owns the transaction boundary,
 same convention as app.services.crm.
 """
-
+ 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-
+ 
 from sqlalchemy.orm import Session
-
+ 
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.message import MessageSender
 from app.models.tenant import Tenant
-from app.services import appointments, crm
+from app.services import appointments, crm, intake
 from app.services.conversation_state import Actor, ConversationEvent, apply_transition
 from app.services.intent_classifier import IntentClassificationResult, classify_intent
-from app.services.intents import IntentCategory
+from app.services.intents import Intent, IntentCategory
 from app.services.safety_protocol import resolve_protocol_action
-
+ 
 GENERIC_ADMIN_HANDOFF_MESSAGE = (
     "Voy a conectarte con alguien de nuestro equipo para ayudarte con esto. "
     "En un momento te responden por aquí mismo."
@@ -41,8 +41,8 @@ REOPENED_AFTER_RESOLVED_MESSAGE = (
     "Gracias por escribir de nuevo. Voy a avisarle a nuestro equipo para que "
     "retome tu conversación."
 )
-
-
+ 
+ 
 @dataclass
 class OrchestratorResult:
     conversation_id: str
@@ -51,8 +51,8 @@ class OrchestratorResult:
     classification: IntentClassificationResult | None
     tools_used: list[str]
     awaiting_human: bool
-
-
+ 
+ 
 def _history_for_gemini(conversation: Conversation) -> list[dict[str, str]]:
     # Keep it short: enough context for a natural reply, not a full replay
     # of the conversation on every turn (cost + latency).
@@ -63,8 +63,8 @@ def _history_for_gemini(conversation: Conversation) -> list[dict[str, str]]:
         if m.body:
             history.append({"role": role, "text": m.body})
     return history
-
-
+ 
+ 
 def _handoff(
     db: Session,
     conversation: Conversation,
@@ -84,8 +84,29 @@ def _handoff(
         conversation.handoff_triggered_at = datetime.now(timezone.utc)
     crm.record_outbound_message(db, conversation, patient_message, sender=MessageSender.BOT)
     return patient_message
-
-
+ 
+ 
+def _intake_turn(
+    db: Session,
+    conversation: Conversation,
+    turn: "intake.IntakeTurn",
+    classification: IntentClassificationResult | None = None,
+) -> OrchestratorResult:
+    if turn.complete:
+        _handoff(db, conversation, reason=turn.reason, priority="MEDIUM", patient_message=turn.reply)
+    else:
+        apply_transition(conversation, ConversationEvent.BOT_ASKS_CLARIFICATION, Actor.BOT)
+        crm.record_outbound_message(db, conversation, turn.reply, sender=MessageSender.BOT)
+    return OrchestratorResult(
+        conversation_id=str(conversation.id),
+        status=conversation.status,
+        reply_text=turn.reply,
+        classification=classification,
+        tools_used=[],
+        awaiting_human=conversation.status == ConversationStatus.WAITING_FOR_HUMAN,
+    )
+ 
+ 
 def process_inbound_message(
     db: Session,
     tenant: Tenant,
@@ -98,13 +119,13 @@ def process_inbound_message(
 ) -> OrchestratorResult:
     contact = crm.get_or_create_contact(db, tenant, phone, whatsapp_profile_name=whatsapp_profile_name)
     conversation = crm.get_or_create_open_conversation(db, tenant, contact)
-
+ 
     # Already deduplicated on twilio_message_id inside record_inbound_message.
     crm.record_inbound_message(db, conversation, body, twilio_message_id=twilio_message_id)
-
+ 
     status_before = conversation.status
     new_status = apply_transition(conversation, ConversationEvent.PATIENT_MESSAGE_RECEIVED, Actor.SYSTEM)
-
+ 
     # The patient is mid-conversation with a human, or just got routed back
     # to one from HUMAN_RESOLVED — the bot stays completely silent either
     # way. This is the enforcement point for "cómo evitar respuestas
@@ -123,7 +144,7 @@ def process_inbound_message(
             tools_used=[],
             awaiting_human=True,
         )
-
+ 
     # --- Reminder-reply guard: runs BEFORE intent classification, on
     # purpose. If this contact has an appointment reminder awaiting a
     # reply and this message reads like a cancel/reschedule request (a
@@ -173,10 +194,21 @@ def process_inbound_message(
                     tools_used=[],
                     awaiting_human=False,
                 )
-
+ 
+    # --- New-patient intake in progress: deterministic, no LLM. Only the
+    # safety layer, a request for a human, or a question can break out of it
+    # (they continue into the normal pipeline below).
+    if intake.is_active(conversation):
+        if intake.should_interrupt(tenant, body, conversation.intake_data["step"]):
+            intake.abandon(conversation)
+        else:
+            for msg in conversation.messages[-1:]:
+                msg.intent = "NEW_PATIENT_INQUIRY"
+            return _intake_turn(db, conversation, intake.advance(tenant, conversation, body))
+ 
     # --- Bot is active: safety check + intent classification + routing ---
     classification = classify_intent(tenant, body, gemini_client=gemini_client)
-
+ 
     for msg in conversation.messages[-1:]:
         msg.intent = classification.primary_intent.value
         if classification.safety_category is not None:
@@ -185,7 +217,7 @@ def process_inbound_message(
             # down safety handoffs by category without re-deriving them
             # from free-text handoff_reason strings.
             msg.extra_metadata = {"safety_category": classification.safety_category.value}
-
+ 
     if classification.category == IntentCategory.C:
         if classification.safety_category is not None:
             action = resolve_protocol_action(tenant, classification.safety_category, classification.priority)
@@ -194,17 +226,28 @@ def process_inbound_message(
         else:  # HUMAN_REQUEST: the patient just asked for a person, nothing to protocol-resolve
             patient_message = GENERIC_ADMIN_HANDOFF_MESSAGE
             reason = f"Patient explicitly requested a human agent (intent {classification.primary_intent.value})."
-
+ 
         reply_text = _handoff(db, conversation, reason=reason, priority=classification.priority.value, patient_message=patient_message)
         tools_used: list[str] = []
-
+ 
+    elif classification.category == IntentCategory.B and (
+        classification.primary_intent == Intent.NEW_PATIENT_INQUIRY and intake.get_config(tenant)
+    ):
+        return _intake_turn(db, conversation, intake.start(tenant, conversation, body), classification)
+ 
     elif classification.category == IntentCategory.B:
         reason = f"Category B request: {classification.primary_intent.value}"
         reply_text = _handoff(
             db, conversation, reason=reason, priority=classification.priority.value, patient_message=GENERIC_ADMIN_HANDOFF_MESSAGE
         )
         tools_used = []
-
+ 
+    elif (
+        classification.primary_intent == Intent.BOOKING_GUIDANCE and intake.get_config(tenant)
+    ):
+        # "¿Cómo agendo?": a person does the registration, so start the intake.
+        return _intake_turn(db, conversation, intake.start(tenant, conversation, body), classification)
+ 
     elif classification.category == IntentCategory.A:
         if gemini_client is None:
             reply_text = (
@@ -242,13 +285,13 @@ def process_inbound_message(
                     patient_message=GENERIC_ADMIN_HANDOFF_MESSAGE,
                 )
                 tools_used = []
-
+ 
     else:  # OTHER_UNCLEAR
         reply_text = GENERIC_UNCLEAR_RETRY_MESSAGE
         apply_transition(conversation, ConversationEvent.BOT_ASKS_CLARIFICATION, Actor.BOT)
         crm.record_outbound_message(db, conversation, reply_text, sender=MessageSender.BOT)
         tools_used = []
-
+ 
     return OrchestratorResult(
         conversation_id=str(conversation.id),
         status=conversation.status,
