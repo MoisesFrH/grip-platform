@@ -57,7 +57,7 @@ def _handle(db: Session, message: mw.InboundMessage) -> str | None:
         return mw.UNSUPPORTED_TYPE_REPLY
     result = process_inbound_message(
         db, tenant, message.phone, message.text,
-        twilio_message_id=message.message_id,
+        twilio_message_id=mw.dedupe_key(message.message_id),
         whatsapp_profile_name=message.profile_name,
         gemini_client=_gemini_client,
     )

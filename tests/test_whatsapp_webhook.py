@@ -48,6 +48,13 @@ def test_signature():
     assert not mw.is_valid_signature(raw, SECRET, "sha1=abc")
 
 
+def test_dedupe_key_fits_the_column_and_is_stable():
+    long_id = "wamid." + "A" * 76
+    key = mw.dedupe_key(long_id)
+    assert len(key) <= 64 and key == mw.dedupe_key(long_id) and key != mw.dedupe_key(long_id + "B")
+    assert mw.dedupe_key("wamid.corto") == "wamid.corto"
+
+
 def test_verify_challenge():
     ok = {"hub.mode": "subscribe", "hub.verify_token": "tok", "hub.challenge": "123"}
     assert mw.verify_challenge(ok, "tok") == "123"

@@ -35,6 +35,15 @@ class InboundMessage:
         return "+" + self.wa_id.lstrip("+")
 
 
+def dedupe_key(message_id: str, max_len: int = 64) -> str:
+    """WhatsApp message ids ("wamid....") run ~80 characters, but the CRM column
+    that stores the provider message id is limited to 64. Longer ids are stored
+    as a stable SHA-1 digest (43 chars), so de-duplication keeps working."""
+    if len(message_id) <= max_len:
+        return message_id
+    return "wa_" + hashlib.sha1(message_id.encode("utf-8")).hexdigest()
+
+
 def is_valid_signature(raw_body: bytes, app_secret: str, header: str | None) -> bool:
     if not app_secret or not header or not header.startswith("sha256="):
         return False
