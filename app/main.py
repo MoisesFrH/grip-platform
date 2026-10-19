@@ -20,6 +20,7 @@ _DASHBOARD_UI_PATH = Path(__file__).parent / "static" / "dashboard.html"
 _CRM_UI_PATH = Path(__file__).parent / "static" / "crm.html"
 _BOOTSTRAP_STAFF_UI_PATH = Path(__file__).parent / "static" / "bootstrap_staff.html"
 _GLASS_CSS_PATH = Path(__file__).parent / "static" / "glass.css"
+_PRIVACY_UI_PATH = Path(__file__).parent / "static" / "privacidad.html"
 
 if get_settings().app_env != "production":
     app.include_router(dev_chat_router)
@@ -74,6 +75,13 @@ def crm_bootstrap_ui() -> FileResponse:
 @app.get("/assets/glass.css")
 def glass_css() -> FileResponse:
     return FileResponse(_GLASS_CSS_PATH, media_type="text/css")
+
+
+# Public privacy policy (Meta requires a URL for the WhatsApp app). Plain
+# static HTML, no data, served in every environment.
+@app.get("/privacidad")
+def privacy_policy() -> FileResponse:
+    return FileResponse(_PRIVACY_UI_PATH)
 
 
 @app.get("/health")
