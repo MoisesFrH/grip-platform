@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.message import MessageSender
 from app.models.tenant import Tenant
-from app.services import appointments, crm, intake
+from app.services import appointments, crm, greeting, intake
 from app.services.conversation_state import Actor, ConversationEvent, apply_transition
 from app.services.intent_classifier import IntentClassificationResult, classify_intent
 from app.services.intents import Intent, IntentCategory
@@ -205,6 +205,23 @@ def process_inbound_message(
             for msg in conversation.messages[-1:]:
                 msg.intent = "NEW_PATIENT_INQUIRY"
             return _intake_turn(db, conversation, intake.advance(tenant, conversation, body))
+ 
+    # --- A bare greeting ("hola", "buenas tardes"): welcome and ask what
+    # they need, instead of the "no entendí" retry. Only a message that is
+    # entirely a greeting gets here, so nothing safety-relevant is skipped.
+    if greeting.is_greeting(body):
+        reply_text = greeting.welcome_message(tenant)
+        for msg in conversation.messages[-1:]:
+            msg.intent = "GREETING"
+        crm.record_outbound_message(db, conversation, reply_text, sender=MessageSender.BOT)
+        return OrchestratorResult(
+            conversation_id=str(conversation.id),
+            status=conversation.status,
+            reply_text=reply_text,
+            classification=None,
+            tools_used=[],
+            awaiting_human=False,
+        )
  
     # --- Bot is active: safety check + intent classification + routing ---
     classification = classify_intent(tenant, body, gemini_client=gemini_client)
