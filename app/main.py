@@ -9,6 +9,7 @@ from app.api.routes.crm import router as crm_router
 from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.dev_chat import router as dev_chat_router
 from app.api.routes.simulator import router as simulator_router
+from app.api.routes.whatsapp import router as whatsapp_router
 from app.core.config import get_settings
 from app.core.db import get_db
 
@@ -27,6 +28,12 @@ if get_settings().app_env != "production":
     @app.get("/simulator")
     def simulator_ui() -> FileResponse:
         return FileResponse(_SIMULATOR_UI_PATH)
+
+
+# The real WhatsApp channel (Twilio). Not gated behind app_env: it is the
+# production entry point, protected by Twilio's request signature instead
+# (it refuses everything until TWILIO_AUTH_TOKEN is set).
+app.include_router(whatsapp_router)
 
 
 # Unlike /dev/chat and /simulator (throwaway testing tools), the dashboard

@@ -36,6 +36,21 @@ class Settings(BaseSettings):
     # only while creating accounts, then clear it again.
     staff_bootstrap_secret: str = ""
 
+    # --- WhatsApp Cloud API (Meta) — POST/GET /webhooks/whatsapp ---
+    # Token the bot uses to SEND messages (Graph API). Empty = the bot
+    # processes messages but cannot reply.
+    meta_access_token: str = ""
+    # The app secret (App settings -> Basic). Used only to verify that a
+    # webhook really comes from Meta. Empty = the webhook refuses everything.
+    meta_app_secret: str = ""
+    # A string you invent; Meta sends it back during the one-time webhook
+    # verification. Empty = verification is refused.
+    meta_verify_token: str = ""
+    # Kill switch: false = the webhook ignores every message.
+    bot_enabled: bool = True
+    # Tenant that receives the WhatsApp conversations.
+    whatsapp_default_tenant_slug: str = "grip"
+
     @field_validator("database_url")
     @classmethod
     def _use_psycopg_driver(cls, value: str) -> str:
