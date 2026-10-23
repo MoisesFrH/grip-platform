@@ -46,6 +46,16 @@ class Settings(BaseSettings):
     # A string you invent; Meta sends it back during the one-time webhook
     # verification. Empty = verification is refused.
     meta_verify_token: str = ""
+    # Business phone number id (Meta) used for reminders sent by the cron job
+    # and the CRM button (they are not replies to an incoming webhook, so the
+    # number can't be read from the payload). Empty = reminders use the
+    # logging stub in app.services.messaging instead of WhatsApp.
+    meta_phone_number_id: str = ""
+    # Name of the Meta-approved *Utility* template used for reminders
+    # (needed to message a patient outside the 24h window). Empty = send a
+    # free-form text, which only works within 24h of the patient's last message.
+    meta_reminder_template: str = ""
+    meta_template_language: str = "es"
     # Kill switch: false = the webhook ignores every message.
     bot_enabled: bool = True
     # Tenant that receives the WhatsApp conversations.

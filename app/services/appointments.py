@@ -14,17 +14,23 @@ because they share the same table:
    same fail-closed philosophy as app.services.safety.
 """
 
+import logging
+import re
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.appointment import Appointment, AppointmentStatus, ReminderResponse
 from app.models.contact import Contact
 from app.models.message import MessageSender
 from app.models.tenant import Tenant
-from app.services import crm
+from app.services import crm, meta_whatsapp, reminder_summary
 from app.services.messaging import send_whatsapp_message
+
+logger = logging.getLogger(__name__)
 
 # Deliberately broad and Dominican-Spanish-flavored; a false positive here
 # just means an ordinary reply gets a human's eyes on it too, which is the
@@ -85,10 +91,40 @@ _CONFIRM_KEYWORDS = [
 
 REMINDER_WINDOW_HOURS = 48  # how long after sending a reminder we still treat a reply as "about the reminder"
 
+# Automatic reminders go out when the appointment is this far away.
+REMINDER_KINDS = ("48h", "24h")
+MIN_LEAD_HOURS = 2  # never send an automatic reminder for an appointment starting in under 2h
+
+# FICTITIOUS placeholder bank details. Replace with the clinic's real data in
+# Tenant.config["payment"] (same keys) before going live. The "fictitious"
+# flag makes the placeholder obvious to staff and in logs.
+DEFAULT_PAYMENT = {
+    "bank_name": "Banco Ficticio de Prueba",
+    "account_holder": "ND Neurodiversa (CUENTA DE PRUEBA)",
+    "account_type": "Cuenta corriente",
+    "account_number": "000-000000-0",
+    "fictitious": True,
+}
+
+_PAY_KEYWORDS = ["pagar", "pago", "transferir", "transferencia", "cuenta", "banco"]
+_PAID_KEYWORDS = ["ya pague", "ya pagué", "ya transferi", "ya transferí", "pague", "pagué", "transferi", "transferí", "comprobante"]
+
 APPOINTMENT_REMINDER_TEMPLATE = (
-    "Hola{name_suffix}, te recordamos tu cita mañana {when} con {therapist} en ND Neurodiversa. "
-    "Si necesitas cancelar o cambiar la cita, respóndenos aquí y te ayuda alguien de nuestro equipo. "
-    "Si todo está bien, solo responde \"Sí\" para confirmar."
+    "Hola{name_suffix}, te recordamos tu cita {when} con {therapist} en ND Neurodiversa.\n\n"
+    "En esta sesión vamos a trabajar en {summary}.\n\n"
+    "¿Deseas adelantar el pago de la sesión por transferencia? Responde \"PAGAR\" y te enviamos los datos de la cuenta.\n\n"
+    "Si todo está bien, responde \"Sí\" para confirmar. Si necesitas cancelar o cambiar la cita, "
+    "respóndenos aquí y te ayuda alguien de nuestro equipo."
+)
+
+# Body to register in Meta (WhatsApp Manager > Message templates), category
+# UTILITY, language Spanish (es). Parameters, in order:
+# {{1}} nombre, {{2}} cuándo, {{3}} terapeuta, {{4}} qué se trabajará.
+META_TEMPLATE_BODY = (
+    "Hola {{1}}, te recordamos tu cita {{2}} con {{3}} en ND Neurodiversa. "
+    "En esta sesión vamos a trabajar en {{4}}. "
+    "¿Deseas adelantar el pago de la sesión por transferencia? Responde PAGAR y te enviamos los datos de la cuenta. "
+    "Si todo está bien, responde Sí para confirmar. Si necesitas cancelar o cambiar la cita, respóndenos aquí."
 )
 
 RESCHEDULE_HANDOFF_MESSAGE = (
@@ -97,6 +133,10 @@ RESCHEDULE_HANDOFF_MESSAGE = (
 )
 
 APPOINTMENT_CONFIRMED_REPLY = "¡Perfecto, gracias por confirmar! Te esperamos."
+
+PAYMENT_RECEIVED_HANDOFF_MESSAGE = (
+    "¡Gracias! Nuestro equipo va a verificar tu transferencia y te confirma por aquí mismo."
+)
 
 
 def _normalize(text: str) -> str:
@@ -123,26 +163,34 @@ def create_appointment(
     return appointment
 
 
-def appointments_needing_reminder(db: Session, tenant: Tenant, *, reference: datetime | None = None) -> list[Appointment]:
-    """Appointments scheduled for "tomorrow" (relative to `reference`, UTC)
-    that haven't had a reminder sent yet and are still on the books
-    (SCHEDULED or CONFIRMED — not already cancelled). Meant to be called
-    once a day by scripts/send_appointment_reminders.py."""
-    reference = reference or datetime.now(timezone.utc)
-    window_start = reference + timedelta(hours=24)
-    window_end = reference + timedelta(hours=48)
+def reminders_due(db: Session, tenant: Tenant, *, reference: datetime | None = None) -> list[tuple[Appointment, str]]:
+    """(appointment, kind) pairs that should get an automatic reminder now.
+    Meant to run hourly (scripts/send_appointment_reminders.py).
 
-    return (
-        db.query(Appointment)
-        .filter(
-            Appointment.tenant_id == tenant.id,
-            Appointment.scheduled_at >= window_start,
-            Appointment.scheduled_at < window_end,
-            Appointment.status.in_([AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED]),
-            Appointment.reminder_sent_at.is_(None),
-        )
-        .all()
-    )
+    * "48h": starts in more than 24h and at most 48h, 48h reminder not sent yet
+      (and the 24h one not sent either — never send them out of order).
+    * "24h": starts within the next 24h (but not in under MIN_LEAD_HOURS),
+      24h reminder not sent yet.
+    Only SCHEDULED / CONFIRMED appointments; cancelled ones are skipped."""
+    reference = reference or datetime.now(timezone.utc)
+    live = [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED]
+    base = db.query(Appointment).filter(Appointment.tenant_id == tenant.id, Appointment.status.in_(live))
+
+    due: list[tuple[Appointment, str]] = []
+    for appt in base.filter(
+        Appointment.scheduled_at > reference + timedelta(hours=24),
+        Appointment.scheduled_at <= reference + timedelta(hours=48),
+        Appointment.reminder_48h_sent_at.is_(None),
+        Appointment.reminder_24h_sent_at.is_(None),
+    ).all():
+        due.append((appt, "48h"))
+    for appt in base.filter(
+        Appointment.scheduled_at > reference + timedelta(hours=MIN_LEAD_HOURS),
+        Appointment.scheduled_at <= reference + timedelta(hours=24),
+        Appointment.reminder_24h_sent_at.is_(None),
+    ).all():
+        due.append((appt, "24h"))
+    return due
 
 
 def mark_reminder_sent(appointment: Appointment, *, at: datetime | None = None) -> None:
@@ -183,6 +231,38 @@ def classify_reminder_reply(body: str) -> ReminderResponse | None:
     return None
 
 
+def wants_to_pay(body: str) -> bool:
+    """The patient answered the reminder's payment question ("PAGAR")."""
+    normalized = _normalize(body)
+    if any(k in normalized for k in _CANCEL_OR_RESCHEDULE_KEYWORDS):
+        return False
+    if any(k in normalized for k in _PAID_KEYWORDS):
+        return False
+    return any(f" {k}" in normalized for k in _PAY_KEYWORDS)
+
+
+def says_already_paid(body: str) -> bool:
+    return any(k in _normalize(body) for k in _PAID_KEYWORDS)
+
+
+def payment_details(tenant: Tenant) -> dict:
+    return {**DEFAULT_PAYMENT, **((tenant.config or {}).get("payment") or {})}
+
+
+def payment_details_message(tenant: Tenant) -> str:
+    p = payment_details(tenant)
+    note = "\n(Datos de prueba, no realices transferencias reales.)" if p.get("fictitious") else ""
+    return (
+        "¡Con gusto! Estos son los datos para la transferencia:\n\n"
+        f"Banco: {p['bank_name']}\n"
+        f"Titular: {p['account_holder']}\n"
+        f"Tipo de cuenta: {p['account_type']}\n"
+        f"Número de cuenta: {p['account_number']}\n"
+        f"{note}\n"
+        "Cuando hayas transferido, escríbenos \"ya pagué\" y nuestro equipo lo verifica."
+    ).replace("\n\n\n", "\n\n")
+
+
 def apply_reminder_reply(appointment: Appointment, response: ReminderResponse) -> None:
     appointment.reminder_response = response
     if response == ReminderResponse.CONFIRMED:
@@ -201,34 +281,123 @@ def apply_reminder_reply(appointment: Appointment, response: ReminderResponse) -
 CLINIC_TIMEZONE = ZoneInfo("America/Santo_Domingo")
 
 
-def _format_when(scheduled_at: datetime) -> str:
-    # Spanish, no year (it's always "tomorrow" in the real reminder job):
-    # "a las 3:00 p. m."
-    local_time = scheduled_at.astimezone(CLINIC_TIMEZONE)
-    return local_time.strftime("a las %I:%M %p").lower().replace("am", "a. m.").replace("pm", "p. m.")
+_WEEKDAYS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+_MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+           "septiembre", "octubre", "noviembre", "diciembre"]
 
 
-def build_reminder_message(appointment: Appointment, contact: Contact) -> str:
-    name_suffix = f" {contact.name}" if contact.name else ""
-    return APPOINTMENT_REMINDER_TEMPLATE.format(
-        name_suffix=name_suffix,
+def _format_time(local_time: datetime) -> str:
+    return local_time.strftime("%I:%M %p").lstrip("0").lower().replace("am", "a. m.").replace("pm", "p. m.")
+
+
+def _format_when(scheduled_at: datetime, *, now: datetime | None = None) -> str:
+    """"mañana a las 3:00 p. m." or "el viernes 24 de octubre a las 3:00 p. m."
+    (always in the clinic's local time)."""
+    local = scheduled_at.astimezone(CLINIC_TIMEZONE)
+    today = (now or datetime.now(timezone.utc)).astimezone(CLINIC_TIMEZONE).date()
+    days = (local.date() - today).days
+    time_part = f"a las {_format_time(local)}"
+    if days == 0:
+        return f"hoy {time_part}"
+    if days == 1:
+        return f"mañana {time_part}"
+    return f"el {_WEEKDAYS[local.weekday()]} {local.day} de {_MONTHS[local.month - 1]} {time_part}"
+
+
+def _one_line(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+@dataclass
+class ReminderContent:
+    name: str | None
+    when: str
+    therapist: str
+    summary: str
+
+    def text(self) -> str:
+        return APPOINTMENT_REMINDER_TEMPLATE.format(
+            name_suffix=f" {self.name}" if self.name else "",
+            when=self.when,
+            therapist=self.therapist,
+            summary=self.summary,
+        )
+
+    def template_params(self) -> list[str]:
+        return [_one_line(p) for p in (self.name or "paciente", self.when, self.therapist, self.summary)]
+
+
+def build_reminder_content(appointment: Appointment, contact: Contact, *, summary: str | None = None) -> ReminderContent:
+    return ReminderContent(
+        name=contact.name,
         when=_format_when(appointment.scheduled_at),
         therapist=appointment.therapist_name,
+        summary=summary or reminder_summary.GENERIC_SUMMARY,
     )
 
 
-def send_reminder(db: Session, tenant: Tenant, appointment: Appointment, contact: Contact) -> str:
-    """The one place that actually sends a reminder: builds the message,
-    records it as an outbound SYSTEM message (so it shows up in the
-    conversation transcript like any other message), marks the
-    appointment's reminder as sent, and calls the messaging stub. Shared
-    by scripts/send_appointment_reminders.py (the real daily job) and the
-    simulator's "probar recordatorio" button (app.api.routes.simulator) —
-    same code path either way, so testing it in the simulator actually
-    exercises the real logic, not a parallel copy of it."""
-    body = build_reminder_message(appointment, contact)
+def build_reminder_message(appointment: Appointment, contact: Contact, *, summary: str | None = None) -> str:
+    return build_reminder_content(appointment, contact, summary=summary).text()
+
+
+class ReminderDeliveryError(Exception):
+    """The reminder could not be delivered; nothing was recorded or marked."""
+
+
+def _deliver(contact: Contact, content: ReminderContent) -> bool:
+    """Real WhatsApp (Meta) when configured, otherwise the logging stub.
+    Outside the 24h window Meta only accepts an approved template, so when
+    META_REMINDER_TEMPLATE is set that is what is sent."""
+    settings = get_settings()
+    if settings.meta_access_token and settings.meta_phone_number_id:
+        if settings.meta_reminder_template:
+            return meta_whatsapp.send_template(
+                settings.meta_access_token, settings.meta_phone_number_id, contact.phone,
+                settings.meta_reminder_template, settings.meta_template_language, content.template_params(),
+            )
+        return meta_whatsapp.send_text(
+            settings.meta_access_token, settings.meta_phone_number_id, contact.phone, content.text()
+        )
+    send_whatsapp_message(contact.phone, content.text())
+    return True
+
+
+def send_reminder(
+    db: Session,
+    tenant: Tenant,
+    appointment: Appointment,
+    contact: Contact,
+    *,
+    kind: str = "manual",
+    summary: str | None = None,
+    use_notes_summary: bool = False,
+) -> str:
+    """The one place that actually sends a reminder (cron job, CRM button and
+    the simulator all come through here). Delivers first; only if delivery
+    works does it record the SYSTEM message and mark the reminder as sent, so
+    a failed send is retried by the next cron run instead of being lost.
+
+    kind: "48h" / "24h" (automatic, marks that flag) or "manual" (CRM button,
+    marks nothing but reminder_sent_at, so it never blocks the automatic ones).
+    use_notes_summary: build the one-sentence summary from the CRM notes."""
+    if summary is None and use_notes_summary:
+        summary = reminder_summary.summary_for_contact(db, tenant, contact)
+    content = build_reminder_content(appointment, contact, summary=summary)
+    body = content.text()
+
+    if not _deliver(contact, content):
+        raise ReminderDeliveryError(f"No se pudo enviar el recordatorio a {contact.phone}")
+
     conversation = crm.get_or_create_open_conversation(db, tenant, contact)
     crm.record_outbound_message(db, conversation, body, sender=MessageSender.SYSTEM)
-    mark_reminder_sent(appointment)
-    send_whatsapp_message(contact.phone, body)
+    now = datetime.now(timezone.utc)
+    mark_reminder_sent(appointment, at=now)
+    if kind == "48h":
+        appointment.reminder_48h_sent_at = now
+    elif kind == "24h":
+        appointment.reminder_24h_sent_at = now
+    # A new reminder opens a new question: forget an earlier "Sí" so the
+    # reply guard watches the next answer (a later cancel must still reach a human).
+    if appointment.reminder_response == ReminderResponse.CONFIRMED:
+        appointment.reminder_response = None
     return body

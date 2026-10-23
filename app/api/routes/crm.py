@@ -161,6 +161,8 @@ class AppointmentOut(BaseModel):
     status: str
     reminder_sent_at: str | None
     reminder_response: str | None
+    reminder_48h_sent_at: str | None = None
+    reminder_24h_sent_at: str | None = None
 
 
 class ClinicalNoteOut(BaseModel):
@@ -386,6 +388,8 @@ def get_patient(contact_id: str, staff: Staff = Depends(get_current_staff), db: 
                 status=a.status.value,
                 reminder_sent_at=a.reminder_sent_at.isoformat() if a.reminder_sent_at else None,
                 reminder_response=a.reminder_response.value if a.reminder_response else None,
+                reminder_48h_sent_at=a.reminder_48h_sent_at.isoformat() if a.reminder_48h_sent_at else None,
+                reminder_24h_sent_at=a.reminder_24h_sent_at.isoformat() if a.reminder_24h_sent_at else None,
             )
             for a in appointment_rows
         ],
@@ -461,6 +465,46 @@ def update_appointment_route(
         reminder_sent_at=appointment.reminder_sent_at.isoformat() if appointment.reminder_sent_at else None,
         reminder_response=appointment.reminder_response.value if appointment.reminder_response else None,
     )
+
+
+# --- manual reminder (secretary + doctor) ------------------------------------
+
+
+class SendReminderOut(BaseModel):
+    message: str
+    sent_at: str
+
+
+@router.post("/patients/{contact_id}/appointments/{appointment_id}/send-reminder", response_model=SendReminderOut)
+def send_reminder_route(
+    contact_id: str,
+    appointment_id: str,
+    staff: Staff = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+) -> SendReminderOut:
+    """Sends the same reminder the automatic job sends (summary from the
+    notes + payment question) right now, on demand. Works for either role:
+    the summary is generated server-side and the secretary never receives
+    the notes themselves. Does not touch the 48h/24h flags, so it never
+    blocks the automatic reminders."""
+    contact = _get_contact_or_404(db, staff, contact_id)
+    appointment = _get_appointment_or_404(db, staff, appointment_id)
+    if appointment.contact_id != contact.id:
+        raise HTTPException(status_code=404, detail="Cita no encontrada.")
+    if appointment.status not in (AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED):
+        raise HTTPException(status_code=400, detail="Solo se puede enviar recordatorio de citas programadas o confirmadas.")
+    tenant = _get_tenant(db, staff)
+    try:
+        body = appointments_service.send_reminder(db, tenant, appointment, contact, kind="manual", use_notes_summary=True)
+    except appointments_service.ReminderDeliveryError:
+        db.rollback()
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo enviar el recordatorio por WhatsApp. Si el paciente no ha escrito en las últimas 24 horas, "
+            "hace falta la plantilla aprobada de Meta (META_REMINDER_TEMPLATE).",
+        )
+    db.commit()
+    return SendReminderOut(message=body, sent_at=appointment.reminder_sent_at.isoformat())
 
 
 # --- clinical notes (doctor only) --------------------------------------------

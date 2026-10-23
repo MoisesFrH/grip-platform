@@ -78,7 +78,12 @@ class Appointment(UUIDPKMixin, TenantMixin, TimestampMixin, Base):
         index=True,
     )
 
+    # Time of the MOST RECENT reminder of any kind (48h, 24h or manual). The
+    # reply guard in the orchestrator keys off this one.
     reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # One flag per automatic reminder, so each goes out exactly once.
+    reminder_48h_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reminder_24h_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reminder_response: Mapped[ReminderResponse | None] = mapped_column(
         Enum(ReminderResponse, name="appointment_reminder_response"), nullable=True
     )

@@ -108,3 +108,44 @@ def send_text(access_token: str, phone_number_id: str, to_wa_id: str, body: str,
     except Exception:
         logger.exception("WhatsApp send failed")
     return False
+
+
+def send_template(
+    access_token: str,
+    phone_number_id: str,
+    to_wa_id: str,
+    template_name: str,
+    language: str,
+    body_params: list[str],
+    *,
+    timeout: float = 10.0,
+) -> bool:
+    """Sends a Meta-approved template (the only kind of message a business may
+    start outside the 24h window). `body_params` fill {{1}}, {{2}}, ... in the
+    template body, in order. Never raises."""
+    url = f"https://graph.facebook.com/{GRAPH_VERSION}/{phone_number_id}/messages"
+    data = json.dumps({
+        "messaging_product": "whatsapp",
+        "to": to_wa_id.lstrip("+"),
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": language},
+            "components": [{
+                "type": "body",
+                "parameters": [{"type": "text", "text": p} for p in body_params],
+            }],
+        },
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        url, data=data, method="POST",
+        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return 200 <= response.status < 300
+    except urllib.error.HTTPError as exc:
+        logger.error("WhatsApp template send failed: HTTP %s %s", exc.code, exc.read()[:300])
+    except Exception:
+        logger.exception("WhatsApp template send failed")
+    return False

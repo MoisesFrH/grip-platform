@@ -168,3 +168,85 @@ def test_unrelated_reply_does_not_touch_the_pending_appointment() -> None:
     finally:
         _cleanup(db, contact.id)
         db.close()
+
+def test_reminders_due_picks_48h_then_24h_and_never_repeats() -> None:
+    db = SessionLocal()
+    tenant = _grip()
+    contact = Contact(tenant_id=tenant.id, phone=_test_phone())
+    db.add(contact)
+    db.flush()
+    now = datetime.now(timezone.utc)
+    far = appointments_service.create_appointment(db, tenant, contact, therapist_name="A", scheduled_at=now + timedelta(hours=40))
+    near = appointments_service.create_appointment(db, tenant, contact, therapist_name="B", scheduled_at=now + timedelta(hours=10))
+    too_soon = appointments_service.create_appointment(db, tenant, contact, therapist_name="C", scheduled_at=now + timedelta(hours=1))
+    later = appointments_service.create_appointment(db, tenant, contact, therapist_name="D", scheduled_at=now + timedelta(hours=100))
+    db.commit()
+
+    try:
+        due = {a.id: kind for a, kind in appointments_service.reminders_due(db, tenant, reference=now)}
+        assert due.get(far.id) == "48h"
+        assert due.get(near.id) == "24h"
+        assert too_soon.id not in due and later.id not in due
+
+        far.reminder_48h_sent_at = now
+        db.commit()
+        due = {a.id: kind for a, kind in appointments_service.reminders_due(db, tenant, reference=now)}
+        assert far.id not in due  # 48h already sent; 24h only once it is within 24h
+
+        due = {a.id: kind for a, kind in appointments_service.reminders_due(db, tenant, reference=now + timedelta(hours=20))}
+        assert due.get(far.id) == "24h"
+    finally:
+        _cleanup(db, contact.id)
+        db.close()
+
+
+def test_send_reminder_marks_the_right_flag_and_includes_notes_summary() -> None:
+    db = SessionLocal()
+    tenant = _grip()
+    contact = Contact(tenant_id=tenant.id, phone=_test_phone(), name="Ana")
+    db.add(contact)
+    db.flush()
+    appt = appointments_service.create_appointment(
+        db, tenant, contact, therapist_name="María", scheduled_at=datetime.now(timezone.utc) + timedelta(hours=30)
+    )
+    try:
+        body = appointments_service.send_reminder(db, tenant, appt, contact, kind="48h", summary="la atención")
+        db.commit()
+        assert "la atención" in body and "PAGAR" in body
+        assert appt.reminder_48h_sent_at is not None and appt.reminder_24h_sent_at is None
+        assert appt.reminder_sent_at is not None
+    finally:
+        _cleanup(db, contact.id)
+        db.close()
+
+
+def test_reply_pagar_gets_bank_details_and_stays_pending() -> None:
+    db = SessionLocal()
+    tenant = _grip()
+    phone = _test_phone()
+    contact, appointment = _seed_pending_reminder(db, tenant, phone)
+    try:
+        result = process_inbound_message(db, tenant, phone, "PAGAR", gemini_client=_ExplodingGeminiClient())
+        db.commit()
+        assert "número de cuenta" in result.reply_text.lower()
+        assert result.awaiting_human is False
+        db.refresh(appointment)
+        assert appointment.reminder_response is None  # still waiting for Sí / cancel
+    finally:
+        _cleanup(db, contact.id)
+        db.close()
+
+
+def test_reply_ya_pague_goes_to_a_human() -> None:
+    db = SessionLocal()
+    tenant = _grip()
+    phone = _test_phone()
+    contact, appointment = _seed_pending_reminder(db, tenant, phone)
+    try:
+        result = process_inbound_message(db, tenant, phone, "ya pagué, gracias", gemini_client=_ExplodingGeminiClient())
+        db.commit()
+        assert result.status == ConversationStatus.WAITING_FOR_HUMAN
+        assert "verificar" in result.reply_text.lower()
+    finally:
+        _cleanup(db, contact.id)
+        db.close()

@@ -667,8 +667,10 @@
     detail.appointments.forEach((a) => {
       const tr = document.createElement("tr");
       const when = formatInClinicTime(a.scheduled_at);
-      const reminder = a.reminder_response ? (REMINDER_LABELS[a.reminder_response] || a.reminder_response)
+      const sentMarks = [a.reminder_48h_sent_at ? "48 h ✓" : "", a.reminder_24h_sent_at ? "24 h ✓" : ""].filter(Boolean).join(" · ");
+      const reminderBase = a.reminder_response ? (REMINDER_LABELS[a.reminder_response] || a.reminder_response)
         : (a.reminder_sent_at ? "Enviado, sin respuesta" : "—");
+      const reminder = sentMarks ? `${reminderBase}<br><span style="font-size:0.7rem;color:var(--on-surface-variant);">${sentMarks}</span>` : reminderBase;
       tr.innerHTML = `
         <td>${when}</td>
         <td>${escapeHtml(a.therapist_name)}</td>
@@ -697,6 +699,16 @@
       voiceBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">volume_up</span>';
       voiceBtn.addEventListener("click", () => playVoiceReminderPreview(a.id, voiceBtn));
       voiceCell.appendChild(voiceBtn);
+
+      if (a.status === "SCHEDULED" || a.status === "CONFIRMED") {
+        const sendBtn = document.createElement("button");
+        sendBtn.type = "button";
+        sendBtn.className = "btn-text";
+        sendBtn.title = "Enviar el recordatorio por WhatsApp ahora";
+        sendBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">send</span>';
+        sendBtn.addEventListener("click", () => sendReminderNow(a.id, sendBtn));
+        voiceCell.appendChild(sendBtn);
+      }
  
       tbody.appendChild(tr);
     });
@@ -739,6 +751,20 @@
     }
   }
  
+  async function sendReminderNow(appointmentId, button) {
+    if (!state.selectedPatientId) return;
+    if (!confirm("¿Enviar ahora el recordatorio por WhatsApp a este paciente?")) return;
+    button.disabled = true;
+    try {
+      await api(`/crm/patients/${state.selectedPatientId}/appointments/${appointmentId}/send-reminder`, { method: "POST" });
+      showToast("Recordatorio enviado.");
+      selectPatient(state.selectedPatientId);
+    } catch (err) {
+      showToast(err.message || "No se pudo enviar el recordatorio.", true);
+      button.disabled = false;
+    }
+  }
+
   // Prototype only — see app/services/voice_reminders.py. Fetches audio
   // (not JSON) directly, since that's what the endpoint returns.
   async function playVoiceReminderPreview(appointmentId, button) {
