@@ -651,15 +651,22 @@ def _case_summary(conversation: Conversation) -> CaseSummaryOut:
 
 
 @router.get("/cases", response_model=list[CaseSummaryOut])
-def list_cases(staff: Staff = Depends(get_current_staff), db: Session = Depends(get_db)) -> list[CaseSummaryOut]:
-    conversations = (
-        db.query(Conversation)
-        .filter(Conversation.tenant_id == staff.tenant_id, Conversation.handoff_reason.isnot(None))
-        .order_by(Conversation.handoff_triggered_at.desc().nullslast())
-        .limit(200)
-        .all()
-    )
-    return [_case_summary(c) for c in conversations]
+def list_cases(
+    all: bool = False,
+    staff: Staff = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+) -> list[CaseSummaryOut]:
+    """all=false (default): only conversations that were escalated to a person.
+    all=true: every conversation with every patient (read-only audit view),
+    most recent activity first."""
+    query = db.query(Conversation).filter(Conversation.tenant_id == staff.tenant_id)
+    if all:
+        query = query.order_by(Conversation.last_message_at.desc().nullslast())
+    else:
+        query = query.filter(Conversation.handoff_reason.isnot(None)).order_by(
+            Conversation.handoff_triggered_at.desc().nullslast()
+        )
+    return [_case_summary(c) for c in query.limit(300).all()]
 
 
 @router.get("/cases/{conversation_id}", response_model=CaseDetailOut)

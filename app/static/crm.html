@@ -431,7 +431,12 @@
  
     <div class="panel">
       <h2><span class="material-symbols-outlined">emergency</span>Casos escalados</h2>
-      <p class="hint">Toda conversación que alguna vez pasó a una persona — abierta o ya resuelta.</p>
+      <p class="hint" id="case-hint">Toda conversación que alguna vez pasó a una persona — abierta o ya resuelta.</p>
+      <div style="display:flex; gap:6px; margin-bottom:10px;">
+        <button type="button" class="btn btn-primary" id="case-filter-escalated" style="padding:6px 12px;">Escalados</button>
+        <button type="button" class="btn" id="case-filter-all" style="padding:6px 12px;">Todas las conversaciones</button>
+      </div>
+      <input id="case-search" type="text" placeholder="Buscar por nombre o teléfono…" style="width:100%; padding:9px 12px; border-radius:10px; border:1px solid var(--outline-variant); font-size:0.85rem; margin-bottom:10px;" />
       <div class="patient-list" id="case-list"></div>
     </div>
  
@@ -499,7 +504,7 @@
  
 <script>
 (function () {
-  const state = { staff: null, patients: [], selectedPatientId: null, cases: [], selectedCaseId: null };
+  const state = { staff: null, patients: [], selectedPatientId: null, cases: [], selectedCaseId: null, caseFilter: "escalated" };
  
   const $ = (id) => document.getElementById(id);
  
@@ -918,7 +923,7 @@
  
   async function loadCases() {
     try {
-      state.cases = await api("/crm/cases");
+      state.cases = await api(state.caseFilter === "all" ? "/crm/cases?all=true" : "/crm/cases");
       renderCaseList();
     } catch (e) {
       if (e.status === 401) { showLogin(); return; }
@@ -929,25 +934,45 @@
   function renderCaseList() {
     const list = $("case-list");
     list.innerHTML = "";
-    if (!state.cases || state.cases.length === 0) {
-      list.innerHTML = '<div class="empty-state">Ninguna conversación ha sido escalada a una persona todavía.</div>';
+    const term = $("case-search").value.trim().toLowerCase();
+    const shown = (state.cases || []).filter((c) =>
+      !term || (c.contact_name || "").toLowerCase().includes(term) || c.contact_phone.toLowerCase().includes(term));
+    if (shown.length === 0) {
+      list.innerHTML = '<div class="empty-state">' + (state.caseFilter === "all"
+        ? "No hay conversaciones que coincidan."
+        : "Ninguna conversación ha sido escalada a una persona todavía.") + "</div>";
       return;
     }
-    state.cases.forEach((c) => {
+    shown.forEach((c) => {
       const row = document.createElement("button");
       row.type = "button";
       row.className = "patient-row" + (c.id === state.selectedCaseId ? " active" : "");
-      const when = c.handoff_triggered_at ? formatInClinicTime(c.handoff_triggered_at) : "—";
+      const whenIso = state.caseFilter === "all" ? c.last_message_at : c.handoff_triggered_at;
+      const when = whenIso ? formatInClinicTime(whenIso) : "—";
       row.innerHTML = `
         <span class="p-name">${escapeHtml(c.contact_name || "(sin nombre)")}</span>
         <span class="p-phone">${escapeHtml(c.contact_phone)} · ${CASE_STATUS_LABELS[c.status] || c.status}</span>
-        <span class="p-meta">${escapeHtml(c.handoff_reason || "")} · ${when}</span>
+        <span class="p-meta">${escapeHtml(c.handoff_reason || (state.caseFilter === "all" ? "Sin escalar" : ""))} · ${when}</span>
       `;
       row.addEventListener("click", () => selectCase(c.id));
       list.appendChild(row);
     });
   }
  
+  function setCaseFilter(filter) {
+    state.caseFilter = filter;
+    $("case-filter-escalated").className = "btn" + (filter === "escalated" ? " btn-primary" : "");
+    $("case-filter-all").className = "btn" + (filter === "all" ? " btn-primary" : "");
+    $("case-filter-escalated").style.padding = $("case-filter-all").style.padding = "6px 12px";
+    $("case-hint").textContent = filter === "all"
+      ? "Todas las conversaciones con pacientes, la más reciente primero (solo lectura, para auditoría)."
+      : "Toda conversación que alguna vez pasó a una persona — abierta o ya resuelta.";
+    loadCases();
+  }
+  $("case-filter-escalated").addEventListener("click", () => setCaseFilter("escalated"));
+  $("case-filter-all").addEventListener("click", () => setCaseFilter("all"));
+  $("case-search").addEventListener("input", renderCaseList);
+
   async function selectCase(id) {
     state.selectedCaseId = id;
     renderCaseList();
