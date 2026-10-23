@@ -469,6 +469,25 @@
           <h3 style="margin:0 0 8px;">Conversación completa</h3>
           <div class="transcript" id="case-transcript"></div>
         </div>
+
+        <div class="section hidden" id="case-actions">
+          <div class="locked-notice hidden" id="case-window-notice" style="margin-bottom:10px;">
+            <span class="material-symbols-outlined">schedule</span>
+            Pasaron más de 24 horas desde el último mensaje del paciente: WhatsApp no permite escribirle texto libre.
+          </div>
+          <form class="inline-form stacked" id="case-reply-form">
+            <div class="field">
+              <label>Responder por WhatsApp</label>
+              <textarea id="case-reply-text" placeholder="Escribe tu respuesta al paciente…"></textarea>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn btn-primary" type="submit" id="case-reply-send"><span class="material-symbols-outlined">send</span>Enviar</button>
+              <button class="btn" type="button" id="case-claim-btn"><span class="material-symbols-outlined">person_add</span>Tomar caso</button>
+              <button class="btn" type="button" id="case-return-btn"><span class="material-symbols-outlined">smart_toy</span>Devolver al bot</button>
+              <button class="btn" type="button" id="case-close-btn"><span class="material-symbols-outlined">check_circle</span>Cerrar caso</button>
+            </div>
+          </form>
+        </div>
  
       </div>
     </div>
@@ -968,8 +987,55 @@
       bubble.innerHTML = `${linkifyPlain(m.body)}<span class="t-meta">${SENDER_LABELS[m.sender] || m.sender} · ${formatInClinicTime(m.created_at)}${m.intent ? " · " + escapeHtml(m.intent) : ""}</span>`;
       transcript.appendChild(bubble);
     });
+    transcript.scrollTop = transcript.scrollHeight;
+    renderCaseActions(detail);
   }
  
+  function renderCaseActions(detail) {
+    const status = detail.status;
+    const waiting = status === "WAITING_FOR_HUMAN";
+    const active = status === "HUMAN_ACTIVE";
+    const resolved = status === "HUMAN_RESOLVED";
+    const open = waiting || active;
+    $("case-actions").classList.toggle("hidden", status === "CLOSED" || status === "BOT_ACTIVE" || status === "BOT_RESUMED" || status === "WAITING_FOR_PATIENT");
+    $("case-reply-form").classList.toggle("hidden", !(open || resolved));
+    $("case-reply-text").disabled = !open || !detail.can_reply_freely;
+    $("case-reply-send").disabled = !open || !detail.can_reply_freely;
+    $("case-window-notice").classList.toggle("hidden", !open || detail.can_reply_freely);
+    $("case-claim-btn").classList.toggle("hidden", !waiting);
+    $("case-return-btn").classList.toggle("hidden", !(open || resolved));
+    $("case-close-btn").classList.toggle("hidden", status === "CLOSED");
+  }
+
+  async function caseAction(path, body, okMessage) {
+    const id = state.selectedCaseId;
+    if (!id) return;
+    try {
+      const detail = await api(`/crm/cases/${id}/${path}`, { method: "POST", body: JSON.stringify(body || {}) });
+      renderCaseDetail(detail);
+      loadCases();
+      if (okMessage) showToast(okMessage);
+      return true;
+    } catch (err) {
+      showToast(err.message || "No se pudo completar la acción.", true);
+      return false;
+    }
+  }
+
+  $("case-reply-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = $("case-reply-text").value.trim();
+    if (!text) return;
+    if (await caseAction("reply", { text }, "Mensaje enviado.")) $("case-reply-text").value = "";
+  });
+  $("case-claim-btn").addEventListener("click", () => caseAction("claim", {}, "Caso tomado."));
+  $("case-return-btn").addEventListener("click", () => {
+    if (confirm("¿Devolver esta conversación al bot? Volverá a responder automáticamente.")) caseAction("resolve", { action: "return_to_bot" }, "Conversación devuelta al bot.");
+  });
+  $("case-close-btn").addEventListener("click", () => {
+    if (confirm("¿Cerrar este caso?")) caseAction("resolve", { action: "close" }, "Caso cerrado.");
+  });
+
   function linkifyPlain(text) {
     if (!text) return "";
     return escapeHtml(text).replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');

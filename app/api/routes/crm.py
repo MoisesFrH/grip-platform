@@ -31,7 +31,8 @@ from app.models.conversation import Conversation
 from app.models.staff import Staff, StaffRole, StaffSession
 from app.models.tenant import Tenant
 from app.services import appointments as appointments_service
-from app.services import auth, clinical_notes, patient_summary, voice_reminders
+from app.services.conversation_state import InvalidTransitionError
+from app.services import agent_reply, auth, clinical_notes, patient_summary, voice_reminders
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 
@@ -234,6 +235,15 @@ class CaseMessageOut(BaseModel):
 
 class CaseDetailOut(CaseSummaryOut):
     messages: list[CaseMessageOut]
+    can_reply_freely: bool = True  # False once the patient's 24h WhatsApp window has closed
+
+
+class CaseReplyRequest(BaseModel):
+    text: str
+
+
+class CaseResolveRequest(BaseModel):
+    action: str  # "return_to_bot" | "close"
 
 
 # --- auth routes -------------------------------------------------------------
@@ -669,4 +679,54 @@ def get_case(conversation_id: str, staff: Staff = Depends(get_current_staff), db
             )
             for m in conversation.messages
         ],
+        can_reply_freely=agent_reply.window_open(conversation),
     )
+
+
+def _case_action(db: Session, staff: Staff, conversation_id: str, fn) -> CaseDetailOut:
+    """Runs one agent action on a case under a row lock, then returns the
+    refreshed case. Domain errors come back as 400/409/502 with a Spanish message."""
+    conversation = _get_case_or_404(db, staff, conversation_id)
+    db.query(Conversation).filter(Conversation.id == conversation.id).with_for_update().one()
+    try:
+        fn(conversation)
+        db.commit()
+    except agent_reply.OutsideWindowError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc))
+    except agent_reply.DeliveryFailedError as exc:
+        db.rollback()
+        raise HTTPException(status_code=502, detail=str(exc))
+    except (agent_reply.AgentReplyError, InvalidTransitionError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    return get_case(conversation_id, staff, db)
+
+
+@router.post("/cases/{conversation_id}/claim", response_model=CaseDetailOut)
+def claim_case(conversation_id: str, staff: Staff = Depends(get_current_staff), db: Session = Depends(get_db)) -> CaseDetailOut:
+    return _case_action(db, staff, conversation_id, lambda c: agent_reply.claim(c, staff.display_name))
+
+
+@router.post("/cases/{conversation_id}/reply", response_model=CaseDetailOut)
+def reply_to_case(
+    conversation_id: str,
+    payload: CaseReplyRequest,
+    staff: Staff = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+) -> CaseDetailOut:
+    return _case_action(db, staff, conversation_id, lambda c: agent_reply.send_reply(db, c, staff.display_name, payload.text))
+
+
+@router.post("/cases/{conversation_id}/resolve", response_model=CaseDetailOut)
+def resolve_case(
+    conversation_id: str,
+    payload: CaseResolveRequest,
+    staff: Staff = Depends(get_current_staff),
+    db: Session = Depends(get_db),
+) -> CaseDetailOut:
+    if payload.action == "return_to_bot":
+        return _case_action(db, staff, conversation_id, lambda c: agent_reply.return_to_bot(c, staff.display_name))
+    if payload.action == "close":
+        return _case_action(db, staff, conversation_id, agent_reply.close)
+    raise HTTPException(status_code=400, detail="Acción inválida.")
