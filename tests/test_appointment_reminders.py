@@ -250,3 +250,38 @@ def test_reply_ya_pague_goes_to_a_human() -> None:
     finally:
         _cleanup(db, contact.id)
         db.close()
+
+
+def test_greeting_uses_crm_name_and_next_appointment() -> None:
+    db = SessionLocal()
+    tenant = _grip()
+    phone = _test_phone()
+    contact = Contact(tenant_id=tenant.id, phone=phone, name="Ana Pérez")
+    db.add(contact)
+    db.flush()
+    appointments_service.create_appointment(
+        db, tenant, contact, therapist_name="Esther Jimenez", scheduled_at=datetime.now(timezone.utc) + timedelta(days=3)
+    )
+    db.commit()
+    try:
+        result = process_inbound_message(db, tenant, phone, "Hola", gemini_client=_ExplodingGeminiClient())
+        db.commit()
+        assert result.reply_text.startswith("¡Hola, Ana!")
+        assert "próxima cita" in result.reply_text and "Esther Jimenez" in result.reply_text
+    finally:
+        _cleanup(db, contact.id)
+        db.close()
+
+
+def test_greeting_for_unknown_contact_stays_generic() -> None:
+    db = SessionLocal()
+    tenant = _grip()
+    phone = _test_phone()
+    try:
+        result = process_inbound_message(db, tenant, phone, "Hola", gemini_client=_ExplodingGeminiClient())
+        db.commit()
+        assert "Te damos la bienvenida" in result.reply_text
+    finally:
+        c = db.query(Contact).filter(Contact.phone == phone).one()
+        _cleanup(db, c.id)
+        db.close()

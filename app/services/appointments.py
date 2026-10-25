@@ -193,6 +193,26 @@ def reminders_due(db: Session, tenant: Tenant, *, reference: datetime | None = N
     return due
 
 
+def next_appointment_for_contact(db: Session, tenant: Tenant, contact: Contact) -> Appointment | None:
+    """The contact's soonest upcoming appointment that is still on the books."""
+    return (
+        db.query(Appointment)
+        .filter(
+            Appointment.tenant_id == tenant.id,
+            Appointment.contact_id == contact.id,
+            Appointment.status.in_([AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED]),
+            Appointment.scheduled_at >= datetime.now(timezone.utc),
+        )
+        .order_by(Appointment.scheduled_at.asc())
+        .first()
+    )
+
+
+def describe_appointment(appointment: Appointment) -> str:
+    """"mañana a las 3:00 p. m. con Esther Jimenez" (clinic time)."""
+    return f"{_format_when(appointment.scheduled_at)} con {appointment.therapist_name}"
+
+
 def mark_reminder_sent(appointment: Appointment, *, at: datetime | None = None) -> None:
     appointment.reminder_sent_at = at or datetime.now(timezone.utc)
 

@@ -250,7 +250,14 @@ def process_inbound_message(
     # they need, instead of the "no entendí" retry. Only a message that is
     # entirely a greeting gets here, so nothing safety-relevant is skipped.
     if greeting.is_greeting(body):
-        reply_text = greeting.welcome_message(tenant)
+        # Personalised when the CRM knows the person: their name (set by
+        # staff) and, if they have one coming up, their next appointment.
+        upcoming = appointments.next_appointment_for_contact(db, tenant, contact) if contact.name else None
+        reply_text = greeting.welcome_message(
+            tenant,
+            name=contact.name,
+            next_appointment=appointments.describe_appointment(upcoming) if upcoming else None,
+        )
         for msg in conversation.messages[-1:]:
             msg.intent = "GREETING"
         crm.record_outbound_message(db, conversation, reply_text, sender=MessageSender.BOT)
