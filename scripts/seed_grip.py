@@ -24,6 +24,7 @@ Usage:
 """
  
 from app.core.db import SessionLocal
+from app.services import agenda, payments
 from app.models.tenant import Tenant
  
 TENANT_NAME = "ND Neurodiversa"
@@ -103,6 +104,12 @@ def seed() -> Tenant:
             tenant.timezone = TENANT_TIMEZONE
  
         tenant.config = ND_CONFIG
+        db.flush()
+        # Therapists and the price list live in their own tables (this script
+        # overwrites tenant.config on every deploy). Only missing rows are
+        # added; amounts filled in by the clinic are never touched.
+        agenda.seed_therapists(db, tenant)
+        payments.ensure_price_items(db, tenant)
         db.commit()
         db.refresh(tenant)
         print(f"Seeded tenant: {tenant.id} ({tenant.slug}) — {tenant.name}")

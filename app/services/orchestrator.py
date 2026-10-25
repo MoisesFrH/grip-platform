@@ -24,7 +24,7 @@ from app.models.appointment import ReminderResponse
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.message import MessageSender
 from app.models.tenant import Tenant
-from app.services import appointments, crm, greeting, intake
+from app.services import appointments, crm, greeting, intake, payments
 from app.services.conversation_state import Actor, ConversationEvent, apply_transition
 from app.services.intent_classifier import IntentClassificationResult, classify_intent
 from app.services.intents import Intent, IntentCategory
@@ -165,6 +165,7 @@ def process_inbound_message(
             if appointments.says_already_paid(body):
                 for msg in conversation.messages[-1:]:
                     msg.intent = "PAYMENT_NOTICE"
+                payments.mark_reported(db, tenant, pending_appointment)
                 reply_text = _handoff(
                     db,
                     conversation,

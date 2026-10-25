@@ -16,7 +16,7 @@ see that script's docstring for why.
 
 import hmac
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
@@ -30,30 +30,27 @@ from app.models.contact import Contact
 from app.models.conversation import Conversation
 from app.models.staff import Staff, StaffRole, StaffSession
 from app.models.tenant import Tenant
+from app.services import agenda, payments
 from app.services import appointments as appointments_service
+from app.models.billing import Payment
 from app.services.conversation_state import InvalidTransitionError
 from app.services import agent_reply, auth, clinical_notes, patient_summary, voice_reminders
 
+from app.api.routes.crm_deps import (  # noqa: E402  (shared with crm_billing)
+    _get_appointment_or_404,
+    _get_contact_or_404,
+    _get_tenant,
+    get_current_staff,
+)
+
 router = APIRouter(prefix="/crm", tags=["crm"])
+
+from app.api.routes import crm_billing  # noqa: E402
+
+router.include_router(crm_billing.router)
 
 
 # --- auth dependencies -----------------------------------------------------
-
-
-def get_current_staff(request: Request, db: Session = Depends(get_db)) -> Staff:
-    token = request.cookies.get(auth.SESSION_COOKIE_NAME)
-    if not token:
-        raise HTTPException(status_code=401, detail="No has iniciado sesión.")
-
-    token_hash = auth.hash_session_token(token)
-    session = db.query(StaffSession).filter(StaffSession.token_hash == token_hash).one_or_none()
-    if session is None or session.expires_at < datetime.now(session.expires_at.tzinfo):
-        raise HTTPException(status_code=401, detail="Tu sesión expiró. Inicia sesión de nuevo.")
-
-    staff = db.query(Staff).filter(Staff.id == session.staff_id, Staff.is_active.is_(True)).one_or_none()
-    if staff is None:
-        raise HTTPException(status_code=401, detail="Cuenta inactiva.")
-    return staff
 
 
 def require_doctor(staff: Staff = Depends(get_current_staff)) -> Staff:
@@ -65,10 +62,6 @@ def require_doctor(staff: Staff = Depends(get_current_staff)) -> Staff:
     return staff
 
 
-def _get_tenant(db: Session, staff: Staff) -> Tenant:
-    return db.query(Tenant).filter(Tenant.id == staff.tenant_id).one()
-
-
 def _check_bootstrap_secret(provided: str) -> None:
     """Guards POST /crm/bootstrap-staff — see Settings.staff_bootstrap_secret.
     404 (not 401/403) both when the feature is off and when the secret is
@@ -78,35 +71,6 @@ def _check_bootstrap_secret(provided: str) -> None:
     configured = get_settings().staff_bootstrap_secret
     if not configured or not hmac.compare_digest(provided, configured):
         raise HTTPException(status_code=404, detail="Not Found")
-
-
-def _get_contact_or_404(db: Session, staff: Staff, contact_id: str) -> Contact:
-    """Every patient lookup is scoped to the logged-in staff member's own
-    tenant — a GRIP secretary can never fetch another tenant's patient by
-    guessing a UUID, even before there is a second tenant to worry about."""
-    try:
-        contact_uuid = uuid.UUID(contact_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado.")
-    contact = db.query(Contact).filter(Contact.id == contact_uuid, Contact.tenant_id == staff.tenant_id).one_or_none()
-    if contact is None:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado.")
-    return contact
-
-
-def _get_appointment_or_404(db: Session, staff: Staff, appointment_id: str) -> Appointment:
-    try:
-        appointment_uuid = uuid.UUID(appointment_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Cita no encontrada.")
-    appointment = (
-        db.query(Appointment)
-        .filter(Appointment.id == appointment_uuid, Appointment.tenant_id == staff.tenant_id)
-        .one_or_none()
-    )
-    if appointment is None:
-        raise HTTPException(status_code=404, detail="Cita no encontrada.")
-    return appointment
 
 
 def _get_case_or_404(db: Session, staff: Staff, conversation_id: str) -> Conversation:
@@ -164,6 +128,8 @@ class AppointmentOut(BaseModel):
     reminder_response: str | None
     reminder_48h_sent_at: str | None = None
     reminder_24h_sent_at: str | None = None
+    duration_minutes: int = 60
+    payment_status: str | None = None
 
 
 class ClinicalNoteOut(BaseModel):
@@ -235,6 +201,7 @@ class CaseMessageOut(BaseModel):
 
 class CaseDetailOut(CaseSummaryOut):
     messages: list[CaseMessageOut]
+    payment_appointment_id: str | None = None  # appointment whose payment is awaiting a decision
     can_reply_freely: bool = True  # False once the patient's 24h WhatsApp window has closed
 
 
@@ -385,6 +352,10 @@ def get_patient(contact_id: str, staff: Staff = Depends(get_current_staff), db: 
             for n in clinical_notes.list_notes_for_contact(db, tenant, contact)
         ]
 
+    pay_status = {
+        p.appointment_id: p.status
+        for p in db.query(Payment).filter(Payment.appointment_id.in_([a.id for a in appointment_rows] or [uuid.UUID(int=0)]))
+    }
     return PatientDetailOut(
         id=str(contact.id),
         name=contact.name or contact.whatsapp_profile_name,
@@ -400,6 +371,8 @@ def get_patient(contact_id: str, staff: Staff = Depends(get_current_staff), db: 
                 reminder_response=a.reminder_response.value if a.reminder_response else None,
                 reminder_48h_sent_at=a.reminder_48h_sent_at.isoformat() if a.reminder_48h_sent_at else None,
                 reminder_24h_sent_at=a.reminder_24h_sent_at.isoformat() if a.reminder_24h_sent_at else None,
+                duration_minutes=a.duration_minutes or 60,
+                payment_status=pay_status.get(a.id),
             )
             for a in appointment_rows
         ],
@@ -433,8 +406,13 @@ def create_appointment_route(
 ) -> AppointmentOut:
     contact = _get_contact_or_404(db, staff, contact_id)
     tenant = _get_tenant(db, staff)
+    start = _aware(payload.scheduled_at)
+    therapist = payload.therapist_name.strip()
+    if not therapist:
+        raise HTTPException(status_code=400, detail="Elige un terapeuta.")
+    _check_slot(db, tenant, therapist=therapist, contact_id=contact.id, start=start)
     appointment = appointments_service.create_appointment(
-        db, tenant, contact, therapist_name=payload.therapist_name, scheduled_at=payload.scheduled_at
+        db, tenant, contact, therapist_name=therapist, scheduled_at=start
     )
     db.commit()
     return AppointmentOut(
@@ -444,7 +422,24 @@ def create_appointment_route(
         status=appointment.status.value,
         reminder_sent_at=None,
         reminder_response=None,
+        duration_minutes=appointment.duration_minutes or 60,
     )
+
+
+def _aware(moment: datetime) -> datetime:
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
+def _check_slot(db: Session, tenant: Tenant, *, therapist: str, contact_id, start: datetime, exclude_id=None) -> None:
+    """Opening hours + no double-booking (same therapist, or same patient)."""
+    error = agenda.slot_error(tenant, start)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    conflicts = agenda.find_conflicts(
+        db, tenant, therapist_name=therapist, contact_id=contact_id, start=start, exclude_id=exclude_id
+    )
+    if conflicts:
+        raise HTTPException(status_code=409, detail=agenda.conflict_message(conflicts))
 
 
 @router.patch("/appointments/{appointment_id}", response_model=AppointmentOut)
@@ -456,15 +451,37 @@ def update_appointment_route(
 ) -> AppointmentOut:
     appointment = _get_appointment_or_404(db, staff, appointment_id)
 
-    if payload.therapist_name is not None:
-        appointment.therapist_name = payload.therapist_name
-    if payload.scheduled_at is not None:
-        appointment.scheduled_at = payload.scheduled_at
+    new_status = appointment.status
     if payload.status is not None:
         try:
-            appointment.status = AppointmentStatus(payload.status)
+            new_status = AppointmentStatus(payload.status)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Estado de cita inválido: {payload.status}")
+
+    new_therapist = (payload.therapist_name or appointment.therapist_name).strip()
+    new_start = _aware(payload.scheduled_at) if payload.scheduled_at is not None else appointment.scheduled_at
+    time_or_person_changed = new_therapist != appointment.therapist_name or new_start != appointment.scheduled_at
+    reopened = new_status in agenda.OCCUPYING and appointment.status not in agenda.OCCUPYING
+    # Opening hours + double-booking are re-checked only when the slot or the
+    # therapist changes, or a cancelled/finished appointment is put back on the books.
+    if new_status in agenda.OCCUPYING and (time_or_person_changed or reopened):
+        _check_slot(
+            db, _get_tenant(db, staff), therapist=new_therapist, contact_id=appointment.contact_id,
+            start=new_start, exclude_id=appointment.id,
+        )
+    if new_start != appointment.scheduled_at:
+        # A new date is a new appointment as far as reminders go: clear what
+        # was sent for the old one, and a "reschedule requested" appointment
+        # that has just been moved is no longer waiting for anyone.
+        appointment.reminder_sent_at = None
+        appointment.reminder_48h_sent_at = None
+        appointment.reminder_24h_sent_at = None
+        appointment.reminder_response = None
+        if new_status == AppointmentStatus.RESCHEDULE_REQUESTED:
+            new_status = AppointmentStatus.SCHEDULED
+    appointment.therapist_name = new_therapist
+    appointment.scheduled_at = new_start
+    appointment.status = new_status
 
     db.commit()
     return AppointmentOut(
@@ -687,7 +704,33 @@ def get_case(conversation_id: str, staff: Staff = Depends(get_current_staff), db
             for m in conversation.messages
         ],
         can_reply_freely=agent_reply.window_open(conversation),
+        payment_appointment_id=_payment_appointment_id(db, conversation),
     )
+
+
+def _payment_appointment_id(db: Session, conversation: Conversation) -> str | None:
+    """The appointment a payment decision is about: one whose payment the
+    patient reported, else the contact's next upcoming live appointment."""
+    reported = (
+        db.query(Appointment)
+        .join(Payment, Payment.appointment_id == Appointment.id)
+        .filter(Appointment.contact_id == conversation.contact_id, Payment.status == "REPORTED")
+        .order_by(Appointment.scheduled_at.asc())
+        .first()
+    )
+    if reported is not None:
+        return str(reported.id)
+    upcoming = (
+        db.query(Appointment)
+        .filter(
+            Appointment.contact_id == conversation.contact_id,
+            Appointment.status.in_(agenda.OCCUPYING),
+            Appointment.scheduled_at >= datetime.now(timezone.utc) - timedelta(days=1),
+        )
+        .order_by(Appointment.scheduled_at.asc())
+        .first()
+    )
+    return str(upcoming.id) if upcoming else None
 
 
 def _case_action(db: Session, staff: Staff, conversation_id: str, fn) -> CaseDetailOut:

@@ -265,6 +265,64 @@
   }
   .toast.show { opacity: 1; }
   .toast.error { background: var(--error); }
+
+  /* ---------- agenda ---------- */
+  .agenda-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .agenda-title { font-weight: 700; font-size: 0.95rem; min-width: 220px; text-align: center; }
+  .seg { display: inline-flex; border: 1px solid var(--outline-variant); border-radius: 20px; overflow: hidden; }
+  .seg button { border: none; background: var(--surface-container-lowest); padding: 7px 14px; font-size: 0.8rem; font-weight: 600; color: var(--on-surface-variant); }
+  .seg button.on { background: var(--primary); color: var(--on-primary); }
+  .agenda-wrap { border: 1px solid var(--surface-container-highest); border-radius: 14px; overflow: auto; background: var(--surface-container-lowest); max-height: 72vh; }
+  .agenda-grid { display: grid; min-width: 640px; }
+  .ag-head { position: sticky; top: 0; z-index: 2; background: var(--surface-container-low); padding: 9px 6px; font-size: 0.75rem; font-weight: 700; text-align: center; border-bottom: 1px solid var(--surface-container-highest); border-left: 1px solid var(--surface-container-high); }
+  .ag-head.today { background: var(--primary-fixed); color: var(--primary); }
+  .ag-corner { position: sticky; top: 0; left: 0; z-index: 3; background: var(--surface-container-low); border-bottom: 1px solid var(--surface-container-highest); }
+  .ag-hour { position: sticky; left: 0; z-index: 1; background: var(--surface-container-lowest); padding: 6px 6px 0; font-size: 0.7rem; color: var(--on-surface-variant); text-align: right; border-bottom: 1px solid var(--surface-container-high); }
+  .ag-cell { min-height: 66px; padding: 3px; border-bottom: 1px solid var(--surface-container-high); border-left: 1px solid var(--surface-container-high); display: flex; flex-direction: column; gap: 3px; cursor: pointer; }
+  .ag-cell:hover { background: var(--surface-container-low); }
+  .ag-cell.closed { cursor: default; background: repeating-linear-gradient(45deg, #f4f3f1, #f4f3f1 6px, #eceae8 6px, #eceae8 12px); }
+  .ag-chip { text-align: left; border: 1px solid var(--outline-variant); border-left-width: 5px; border-radius: 8px; padding: 4px 6px; font-size: 0.72rem; line-height: 1.25; background: #fff; width: 100%; }
+  .ag-chip:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.18); }
+  .ag-chip .c-time { font-weight: 700; }
+  .ag-chip .c-sub { color: var(--on-surface-variant); }
+  .st-SCHEDULED { border-left-color: #4a6cc9; }
+  .st-CONFIRMED { border-left-color: #2e8b57; }
+  .st-RESCHEDULE_REQUESTED { border-left-color: var(--secondary); background: var(--secondary-fixed); }
+  .st-CANCELLED { border-left-color: #9a9a9a; opacity: 0.55; text-decoration: line-through; }
+  .st-COMPLETED { border-left-color: #6b7f9e; opacity: 0.8; }
+  .st-NO_SHOW { border-left-color: var(--error); opacity: 0.8; }
+  .pay-badge { display: inline-block; margin-top: 2px; padding: 0 6px; border-radius: 8px; font-size: 0.64rem; font-weight: 700; }
+  .pay-VERIFIED { background: #d9f2e3; color: #17603a; }
+  .pay-REPORTED { background: #fff1cc; color: #7a5600; }
+  .pay-PENDING { background: var(--surface-container-high); color: var(--on-surface-variant); }
+  .pay-REJECTED { background: var(--error-container); color: var(--on-error-container); }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.72rem; color: var(--on-surface-variant); margin-top: 10px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+
+  /* ---------- modal ---------- */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.42); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal-card { background: var(--surface-container-lowest); border-radius: 18px; width: 100%; max-width: 540px; max-height: 92vh; overflow-y: auto; padding: 20px 22px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); }
+  .modal-card h2 { font-size: 1.05rem; margin: 0 0 2px; }
+  .modal-card .sub { font-size: 0.82rem; color: var(--on-surface-variant); margin-bottom: 12px; }
+  .modal-card h4 { font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--on-surface-variant); margin: 18px 0 8px; }
+  .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form-grid .field { margin-bottom: 0; }
+  .form-grid .wide { grid-column: 1 / -1; }
+
+  /* ---------- payments ---------- */
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .kpi { border: 1px solid var(--surface-container-highest); border-radius: 12px; padding: 10px 12px; background: var(--surface-container-lowest); }
+  .kpi .k-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--on-surface-variant); }
+  .kpi .k-value { font-size: 1.15rem; font-weight: 700; }
+  .kpi .k-sub { font-size: 0.72rem; color: var(--on-surface-variant); }
+  .breakdowns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 8px 0 16px; }
+  .breakdowns ul { list-style: none; padding: 0; margin: 0; font-size: 0.82rem; }
+  .breakdowns li { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid var(--surface-container-high); }
+  .table-wrap { overflow-x: auto; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover td { background: var(--surface-container-low); }
+  .price-input { width: 120px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--outline-variant); font-size: 0.84rem; }
 </style>
 <link href="/assets/glass.css" rel="stylesheet" />
 </head>
@@ -321,6 +379,12 @@
     <button type="button" class="tab-btn" id="tab-btn-cases">
       <span class="material-symbols-outlined">emergency</span>Casos escalados
     </button>
+    <button type="button" class="tab-btn" id="tab-btn-agenda">
+      <span class="material-symbols-outlined">calendar_month</span>Agenda
+    </button>
+    <button type="button" class="tab-btn" id="tab-btn-payments">
+      <span class="material-symbols-outlined">payments</span>Pagos
+    </button>
   </div>
  
   <!-- ===== WORKSPACE (post-login) ===== -->
@@ -369,7 +433,7 @@
           <form class="inline-form" id="appointment-form">
             <div class="field">
               <label>Terapeuta</label>
-              <input type="text" id="apt-therapist" required placeholder="Nombre del terapeuta" />
+              <select id="apt-therapist" required><option value="">Elige un terapeuta…</option></select>
             </div>
             <div class="field">
               <label>Fecha y hora</label>
@@ -449,7 +513,10 @@
             <p class="name" id="case-contact-name">—</p>
             <span class="phone" id="case-contact-phone">—</span>
           </div>
-          <span class="status-chip" id="case-status">—</span>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="btn hidden" id="case-payment-btn"><span class="material-symbols-outlined">payments</span>Pago de la cita</button>
+            <span class="status-chip" id="case-status">—</span>
+          </div>
         </div>
  
         <div class="section hidden" id="case-intake">
@@ -498,13 +565,115 @@
     </div>
   </div>
  
+  <!-- ===== AGENDA (post-login) ===== -->
+  <div class="hidden" id="agenda-view">
+    <div class="agenda-toolbar">
+      <button type="button" class="btn" id="ag-prev" aria-label="Anterior"><span class="material-symbols-outlined">chevron_left</span></button>
+      <button type="button" class="btn" id="ag-today">Hoy</button>
+      <button type="button" class="btn" id="ag-next" aria-label="Siguiente"><span class="material-symbols-outlined">chevron_right</span></button>
+      <span class="agenda-title" id="ag-title">—</span>
+      <div class="seg" id="ag-view-seg">
+        <button type="button" data-view="week" class="on">Semana</button>
+        <button type="button" data-view="day">Día por terapeuta</button>
+      </div>
+      <select id="ag-therapist" class="status-select" style="padding:8px 10px;"><option value="">Todos los terapeutas</option></select>
+      <button type="button" class="btn btn-primary" id="ag-new"><span class="material-symbols-outlined">add</span>Nueva cita</button>
+    </div>
+    <div class="agenda-wrap"><div class="agenda-grid" id="ag-grid"></div></div>
+    <div class="legend">
+      <span><i style="background:#4a6cc9"></i>Programada</span>
+      <span><i style="background:#2e8b57"></i>Confirmada</span>
+      <span><i style="background:var(--secondary)"></i>Reprogramación solicitada</span>
+      <span><i style="background:#6b7f9e"></i>Completada</span>
+      <span><i style="background:var(--error)"></i>No asistió</span>
+      <span><i style="background:#9a9a9a"></i>Cancelada</span>
+      <span>Zonas rayadas: fuera del horario de atención. Toca un hueco para agendar.</span>
+    </div>
+  </div>
+
+  <!-- ===== PAYMENTS (post-login) ===== -->
+  <div class="hidden" id="payments-view">
+    <div class="panel">
+      <div class="panel-header-row">
+        <h2><span class="material-symbols-outlined">payments</span>Pagos</h2>
+        <a class="btn" id="pay-export" href="#"><span class="material-symbols-outlined">download</span>Exportar CSV</a>
+      </div>
+      <div class="agenda-toolbar">
+        <input type="month" id="pay-month" class="status-select" style="padding:8px 10px;" />
+        <select id="pay-status" class="status-select" style="padding:8px 10px;">
+          <option value="">Todos los estados</option>
+          <option value="PENDING">Pendiente</option><option value="REPORTED">Informado</option>
+          <option value="VERIFIED">Verificado</option><option value="REJECTED">Rechazado</option>
+        </select>
+        <select id="pay-therapist" class="status-select" style="padding:8px 10px;"><option value="">Todos los terapeutas</option></select>
+      </div>
+      <div class="kpi-row" id="pay-kpis"></div>
+      <div class="breakdowns">
+        <div><h3 style="margin:0 0 6px;font-size:.78rem;text-transform:uppercase;color:var(--on-surface-variant);">Verificado por forma de pago</h3><ul id="pay-by-method"></ul></div>
+        <div><h3 style="margin:0 0 6px;font-size:.78rem;text-transform:uppercase;color:var(--on-surface-variant);">Verificado por terapeuta</h3><ul id="pay-by-therapist"></ul></div>
+      </div>
+      <div class="hint hidden" id="pay-without-amount"></div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Fecha</th><th>Paciente</th><th>Terapeuta</th><th>Monto</th><th>Forma</th><th>Estado</th><th>Referencia</th></tr></thead>
+          <tbody id="pay-tbody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state hidden" id="pay-empty">No hay pagos registrados en este mes.</div>
+
+      <div class="section">
+        <h3>Tarifas por servicio</h3>
+        <p class="hint">Los montos se llenan aquí; se ofrecen al registrar un pago y se pueden ajustar en cada cita.</p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Servicio</th><th>Monto (RD$)</th><th>Activo</th><th></th></tr></thead>
+            <tbody id="price-tbody"></tbody>
+          </table>
+        </div>
+        <form class="inline-form" id="price-form">
+          <div class="field"><label>Nuevo servicio</label><input type="text" id="price-new-name" placeholder="Nombre" /></div>
+          <div class="field"><label>Monto (RD$)</label><input type="number" id="price-new-amount" min="0" step="0.01" /></div>
+          <button class="btn btn-primary" type="submit">Agregar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
 </main>
+
+<!-- ===== MODAL: new appointment ===== -->
+<div class="modal-backdrop hidden" id="new-apt-modal">
+  <div class="modal-card">
+    <h2>Nueva cita</h2>
+    <p class="sub">Duración fija de 60 minutos, dentro del horario de atención.</p>
+    <form id="new-apt-form">
+      <div class="form-grid">
+        <div class="field wide"><label>Paciente</label>
+          <input type="text" id="new-apt-patient" list="new-apt-patients" placeholder="Escribe un nombre o teléfono…" required autocomplete="off" />
+          <datalist id="new-apt-patients"></datalist>
+        </div>
+        <div class="field"><label>Terapeuta</label><select id="new-apt-therapist" required></select></div>
+        <div class="field"><label>Fecha y hora</label><input type="datetime-local" id="new-apt-when" step="3600" required /></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" type="submit"><span class="material-symbols-outlined">event</span>Agendar</button>
+        <button class="btn" type="button" data-close="new-apt-modal">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== MODAL: appointment + payment ===== -->
+<div class="modal-backdrop hidden" id="apt-modal">
+  <div class="modal-card" id="apt-modal-card"></div>
+</div>
  
 <div class="toast" id="toast"></div>
  
 <script>
 (function () {
-  const state = { staff: null, patients: [], selectedPatientId: null, cases: [], selectedCaseId: null, caseFilter: "escalated" };
+  const state = { staff: null, patients: [], selectedPatientId: null, cases: [], selectedCaseId: null, caseFilter: "escalated",
+    therapists: [], priceItems: [], agenda: { view: window.innerWidth < 860 ? "day" : "week", anchor: null, therapist: "", data: null } };
  
   const $ = (id) => document.getElementById(id);
  
@@ -558,38 +727,36 @@
   function showLogin() {
     $("login-view").classList.remove("hidden");
     $("tab-bar").classList.add("hidden");
-    $("workspace-view").classList.add("hidden");
-    $("cases-view").classList.add("hidden");
+    Object.values(TABS).forEach((id) => $(id).classList.add("hidden"));
     $("staff-box").classList.add("hidden");
   }
  
   function enterWorkspace() {
     $("login-view").classList.add("hidden");
     $("tab-bar").classList.remove("hidden");
-    $("workspace-view").classList.remove("hidden");
+    showTab("patients");
     $("staff-box").classList.remove("hidden");
     $("staff-name").textContent = state.staff.display_name;
     $("staff-role").textContent = state.staff.role === "DOCTOR" ? "Doctor/a" : "Secretaría";
     loadPatients();
+    loadTherapists();
   }
  
   // ---------- tabs ----------
  
-  $("tab-btn-patients").addEventListener("click", () => {
-    $("tab-btn-patients").classList.add("active");
-    $("tab-btn-cases").classList.remove("active");
-    $("workspace-view").classList.remove("hidden");
-    $("cases-view").classList.add("hidden");
-  });
- 
-  $("tab-btn-cases").addEventListener("click", () => {
-    $("tab-btn-cases").classList.add("active");
-    $("tab-btn-patients").classList.remove("active");
-    $("cases-view").classList.remove("hidden");
-    $("workspace-view").classList.add("hidden");
-    loadCases();
-  });
- 
+  const TABS = { patients: "workspace-view", cases: "cases-view", agenda: "agenda-view", payments: "payments-view" };
+
+  function showTab(name) {
+    Object.keys(TABS).forEach((key) => {
+      $("tab-btn-" + key).classList.toggle("active", key === name);
+      $(TABS[key]).classList.toggle("hidden", key !== name);
+    });
+    if (name === "cases") loadCases();
+    if (name === "agenda") loadAgenda();
+    if (name === "payments") loadPayments();
+  }
+  Object.keys(TABS).forEach((key) => $("tab-btn-" + key).addEventListener("click", () => showTab(key)));
+
   $("login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     $("login-error").classList.add("hidden");
@@ -619,8 +786,6 @@
     state.staff = null;
     state.selectedPatientId = null;
     state.selectedCaseId = null;
-    $("tab-btn-patients").classList.add("active");
-    $("tab-btn-cases").classList.remove("active");
     showLogin();
   });
  
@@ -723,6 +888,15 @@
       voiceBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">volume_up</span>';
       voiceBtn.addEventListener("click", () => playVoiceReminderPreview(a.id, voiceBtn));
       voiceCell.appendChild(voiceBtn);
+
+      const payBtn = document.createElement("button");
+      payBtn.type = "button";
+      payBtn.className = "btn-text";
+      payBtn.title = "Ver cita y pago";
+      payBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">payments</span>'
+        + (a.payment_status ? `<span class="pay-badge pay-${a.payment_status}">${PAY_STATUS_LABELS[a.payment_status]}</span>` : "");
+      payBtn.addEventListener("click", () => openAppointmentPanel(a.id));
+      voiceCell.appendChild(payBtn);
 
       if (a.status === "SCHEDULED" || a.status === "CONFIRMED") {
         const sendBtn = document.createElement("button");
@@ -1013,6 +1187,8 @@
       transcript.appendChild(bubble);
     });
     transcript.scrollTop = transcript.scrollHeight;
+    state.casePaymentAppointment = detail.payment_appointment_id || null;
+    $("case-payment-btn").classList.toggle("hidden", !state.casePaymentAppointment);
     renderCaseActions(detail);
   }
  
@@ -1102,6 +1278,384 @@
     });
   }
  
+
+  // ====================== shared date helpers (clinic time) ======================
+  const TZ = "America/Santo_Domingo";
+  const WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+  const MONTHS = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  const PAY_STATUS_LABELS = { PENDING: "Pendiente", REPORTED: "Informado", VERIFIED: "Verificado", REJECTED: "Rechazado" };
+  const PAY_METHOD_LABELS = { TRANSFER: "Transferencia", CASH: "Efectivo", CARD: "Tarjeta", SENASA: "SeNaSa", PATRONATO: "Patronato", OTHER: "Otro" };
+
+  function clinicToday() { return new Date().toLocaleDateString("en-CA", { timeZone: TZ }); }
+  function ymdParts(ymd) { return ymd.split("-").map(Number); }
+  function ymdAdd(ymd, n) { const [y, m, d] = ymdParts(ymd); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); }
+  function ymdWeekday(ymd) { const [y, m, d] = ymdParts(ymd); return (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7; }
+  function mondayOf(ymd) { return ymdAdd(ymd, -ymdWeekday(ymd)); }
+  function ymdShort(ymd) { const [, m, d] = ymdParts(ymd); return `${d} ${MONTHS[m - 1].slice(0, 3)}`; }
+  function ymdLong(ymd) { const [y, m, d] = ymdParts(ymd); return `${WEEKDAYS[ymdWeekday(ymd)]} ${d} de ${MONTHS[m - 1]} de ${y}`; }
+  const partsFmt = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  function clinicParts(iso) {
+    const o = {};
+    partsFmt.formatToParts(new Date(iso)).forEach((p) => { o[p.type] = p.value; });
+    return { ymd: `${o.year}-${o.month}-${o.day}`, hour: Number(o.hour), minute: Number(o.minute) };
+  }
+  function fmtTime(h, m) { const hh = h % 12 || 12; return `${hh}:${String(m || 0).padStart(2, "0")} ${h >= 12 ? "p. m." : "a. m."}`; }
+  function money(v) { return v === null || v === undefined ? "—" : Number(v).toLocaleString("es-DO", { style: "currency", currency: "DOP" }); }
+  function pad2(n) { return String(n).padStart(2, "0"); }
+
+  function openModal(id) { $(id).classList.remove("hidden"); }
+  function closeModal(id) { $(id).classList.add("hidden"); }
+  document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => closeModal(b.dataset.close)));
+  ["new-apt-modal", "apt-modal"].forEach((id) => $(id).addEventListener("click", (e) => { if (e.target === $(id)) closeModal(id); }));
+
+  async function loadTherapists() {
+    try {
+      state.therapists = await api("/crm/therapists");
+      const sel = $("apt-therapist");
+      sel.innerHTML = '<option value="">Elige un terapeuta…</option>' +
+        state.therapists.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+    } catch (e) { /* the form simply stays without options */ }
+  }
+
+  function refreshOpenViews() {
+    if (!$("agenda-view").classList.contains("hidden")) loadAgenda();
+    if (!$("payments-view").classList.contains("hidden")) loadPayments();
+    if (state.selectedPatientId && !$("workspace-view").classList.contains("hidden")) selectPatient(state.selectedPatientId);
+    if (state.selectedCaseId && !$("cases-view").classList.contains("hidden")) selectCase(state.selectedCaseId);
+  }
+
+  // ============================== agenda ==============================
+
+  async function loadAgenda() {
+    const a = state.agenda;
+    if (!a.anchor) a.anchor = clinicToday();
+    const start = a.view === "week" ? mondayOf(a.anchor) : a.anchor;
+    try {
+      a.data = await api(`/crm/agenda?start=${start}&days=${a.view === "week" ? 7 : 1}`);
+      state.therapists = a.data.therapists;
+      renderAgenda();
+    } catch (e) {
+      if (e.status === 401) { showLogin(); return; }
+      showToast("No se pudo cargar la agenda.", true);
+    }
+  }
+
+  function renderAgenda() {
+    const a = state.agenda, data = a.data;
+    document.querySelectorAll("#ag-view-seg button").forEach((b) => b.classList.toggle("on", b.dataset.view === a.view));
+
+    const sel = $("ag-therapist");
+    sel.innerHTML = '<option value="">Todos los terapeutas</option>' +
+      data.therapists.map((t) => `<option value="${escapeHtml(t)}"${t === a.therapist ? " selected" : ""}>${escapeHtml(t)}</option>`).join("");
+
+    const first = data.start_date;
+    const items = data.appointments.map((it) => Object.assign({ p: clinicParts(it.start) }, it));
+    const today = clinicToday();
+
+    // columns
+    let cols = [];
+    if (a.view === "week") {
+      for (let i = 0; i < 7; i++) {
+        const ymd = ymdAdd(first, i);
+        if (i < 6 || items.some((it) => it.p.ymd === ymd)) cols.push({ ymd, label: `${WEEKDAYS[i]} ${ymdShort(ymd)}`, therapist: null, today: ymd === today });
+      }
+      $("ag-title").textContent = `${ymdShort(first)} – ${ymdShort(ymdAdd(first, 5))} ${ymdParts(first)[0]}`;
+    } else {
+      const names = a.therapist ? [a.therapist] : data.therapists;
+      cols = (names.length ? names : [""]).map((t) => ({ ymd: first, label: t || "Citas", therapist: t || null, today: false }));
+      $("ag-title").textContent = ymdLong(first);
+    }
+
+    // hour range: opening hours of the shown days, widened by any appointment outside them
+    let minH = 24, maxH = 0;
+    cols.forEach((c) => {
+      const h = data.hours[String(ymdWeekday(c.ymd))];
+      if (h) { minH = Math.min(minH, h[0]); maxH = Math.max(maxH, h[1]); }
+    });
+    if (minH > maxH) { minH = 9; maxH = 18; }
+    items.forEach((it) => { minH = Math.min(minH, it.p.hour); maxH = Math.max(maxH, it.p.hour + 1); });
+
+    const grid = $("ag-grid");
+    grid.style.gridTemplateColumns = `62px repeat(${cols.length}, minmax(130px, 1fr))`;
+    let html = '<div class="ag-corner"></div>';
+    cols.forEach((c) => { html += `<div class="ag-head${c.today ? " today" : ""}">${escapeHtml(c.label)}</div>`; });
+
+    for (let hour = minH; hour < maxH; hour++) {
+      html += `<div class="ag-hour">${fmtTime(hour, 0)}</div>`;
+      cols.forEach((c, ci) => {
+        const h = data.hours[String(ymdWeekday(c.ymd))];
+        const closed = !h || hour < h[0] || hour >= h[1];
+        const here = items.filter((it) => it.p.ymd === c.ymd && it.p.hour === hour &&
+          (a.view === "week" ? (!a.therapist || it.therapist_name === a.therapist) : (c.therapist === null || it.therapist_name === c.therapist)));
+        html += `<div class="ag-cell${closed ? " closed" : ""}" data-ymd="${c.ymd}" data-hour="${hour}" data-col="${ci}">` +
+          here.map((it) => chipHtml(it, a.view)).join("") + "</div>";
+      });
+    }
+    grid.innerHTML = html;
+
+    grid.querySelectorAll(".ag-chip").forEach((chip) => chip.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openAppointmentPanel(chip.dataset.id);
+    }));
+    grid.querySelectorAll(".ag-cell:not(.closed)").forEach((cell) => cell.addEventListener("click", () => {
+      const col = cols[Number(cell.dataset.col)];
+      openNewAppointment({ ymd: cell.dataset.ymd, hour: Number(cell.dataset.hour), therapist: a.view === "day" ? col.therapist : a.therapist });
+    }));
+  }
+
+  function chipHtml(it, view) {
+    const pay = it.payment_status ? `<br><span class="pay-badge pay-${it.payment_status}">Pago: ${PAY_STATUS_LABELS[it.payment_status].toLowerCase()}</span>` : "";
+    const sub = view === "week" ? `<br><span class="c-sub">${escapeHtml(it.therapist_name)}</span>` : "";
+    return `<button type="button" class="ag-chip st-${it.status}" data-id="${it.id}" title="${escapeHtml(it.patient_name)} · ${STATUS_LABELS[it.status] || it.status}">` +
+      `<span class="c-time">${fmtTime(it.p.hour, it.p.minute)}</span> ${escapeHtml(it.patient_name)}${sub}${pay}</button>`;
+  }
+
+  document.querySelectorAll("#ag-view-seg button").forEach((b) => b.addEventListener("click", () => {
+    state.agenda.view = b.dataset.view;
+    loadAgenda();
+  }));
+  $("ag-therapist").addEventListener("change", () => { state.agenda.therapist = $("ag-therapist").value; renderAgenda(); });
+  $("ag-today").addEventListener("click", () => { state.agenda.anchor = clinicToday(); loadAgenda(); });
+  $("ag-prev").addEventListener("click", () => { state.agenda.anchor = ymdAdd(state.agenda.anchor || clinicToday(), state.agenda.view === "week" ? -7 : -1); loadAgenda(); });
+  $("ag-next").addEventListener("click", () => { state.agenda.anchor = ymdAdd(state.agenda.anchor || clinicToday(), state.agenda.view === "week" ? 7 : 1); loadAgenda(); });
+  $("ag-new").addEventListener("click", () => openNewAppointment({ ymd: state.agenda.anchor || clinicToday(), hour: 9, therapist: state.agenda.therapist }));
+
+  // ---------- new appointment ----------
+  let newAptPatientIndex = {};
+
+  function openNewAppointment(pref) {
+    const list = $("new-apt-patients");
+    newAptPatientIndex = {};
+    list.innerHTML = "";
+    state.patients.forEach((p) => {
+      const label = `${p.name || "(sin nombre)"} · ${p.phone}`;
+      newAptPatientIndex[label] = p.id;
+      const opt = document.createElement("option");
+      opt.value = label;
+      list.appendChild(opt);
+    });
+    $("new-apt-patient").value = "";
+    $("new-apt-therapist").innerHTML = state.therapists.map((t) => `<option value="${escapeHtml(t)}"${t === pref.therapist ? " selected" : ""}>${escapeHtml(t)}</option>`).join("");
+    $("new-apt-when").value = `${pref.ymd}T${pad2(pref.hour)}:00`;
+    openModal("new-apt-modal");
+  }
+
+  $("new-apt-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const patientId = newAptPatientIndex[$("new-apt-patient").value];
+    if (!patientId) { showToast("Elige un paciente de la lista.", true); return; }
+    try {
+      await api(`/crm/patients/${patientId}/appointments`, {
+        method: "POST",
+        body: JSON.stringify({ therapist_name: $("new-apt-therapist").value, scheduled_at: clinicLocalDatetimeToUtcIso($("new-apt-when").value) }),
+      });
+      closeModal("new-apt-modal");
+      showToast("Cita agendada.");
+      refreshOpenViews();
+    } catch (err) {
+      showToast(err.message || "No se pudo agendar la cita.", true);
+    }
+  });
+
+  // ---------- appointment + payment panel ----------
+
+  async function openAppointmentPanel(appointmentId) {
+    const card = $("apt-modal-card");
+    card.innerHTML = '<p class="sub">Cargando…</p>';
+    openModal("apt-modal");
+    let appt, pay;
+    try {
+      [appt, pay] = await Promise.all([api(`/crm/appointments/${appointmentId}`), api(`/crm/appointments/${appointmentId}/payment`)]);
+      if (!state.priceItems.length) state.priceItems = await api("/crm/price-items");
+    } catch (err) {
+      closeModal("apt-modal");
+      showToast(err.message || "No se pudo abrir la cita.", true);
+      return;
+    }
+    const p = clinicParts(appt.start);
+    const live = appt.status === "SCHEDULED" || appt.status === "CONFIRMED";
+    const priceOpts = '<option value="">— Elegir de la lista de tarifas —</option>' +
+      state.priceItems.filter((x) => x.is_active).map((x) => `<option value="${x.amount === null ? "" : x.amount}">${escapeHtml(x.name)}${x.amount === null ? " (sin monto)" : " — " + money(x.amount)}</option>`).join("");
+    const opts = (map, cur) => Object.keys(map).map((k) => `<option value="${k}"${k === cur ? " selected" : ""}>${map[k]}</option>`).join("");
+
+    card.innerHTML = `
+      <h2>${escapeHtml(appt.patient_name)}</h2>
+      <p class="sub">${escapeHtml(appt.phone)} · ${ymdLong(p.ymd)}, ${fmtTime(p.hour, p.minute)} · ${escapeHtml(appt.therapist_name)}</p>
+      <div class="modal-actions" style="margin-top:0;">
+        <button class="btn" type="button" id="m-open-patient"><span class="material-symbols-outlined">person</span>Abrir ficha</button>
+        ${live ? '<button class="btn" type="button" id="m-send-reminder"><span class="material-symbols-outlined">send</span>Enviar recordatorio</button>' : ""}
+      </div>
+
+      <h4>Cita</h4>
+      <div class="form-grid">
+        <div class="field"><label>Estado</label><select id="m-status">${opts(STATUS_LABELS, appt.status)}</select></div>
+        <div class="field"><label>Terapeuta</label><select id="m-therapist">${[...new Set([...state.therapists, appt.therapist_name])].map((t) => `<option${t === appt.therapist_name ? " selected" : ""}>${escapeHtml(t)}</option>`).join("")}</select></div>
+        <div class="field wide"><label>Reprogramar (fecha y hora)</label><input type="datetime-local" id="m-when" step="3600" value="${p.ymd}T${pad2(p.hour)}:${pad2(p.minute)}" /></div>
+      </div>
+      <div class="modal-actions"><button class="btn" type="button" id="m-save-appt"><span class="material-symbols-outlined">save</span>Guardar cambios de la cita</button></div>
+
+      <h4>Pago</h4>
+      <div class="form-grid">
+        <div class="field wide"><label>Tarifa</label><select id="m-price">${priceOpts}</select></div>
+        <div class="field"><label>Monto (RD$)</label><input type="number" id="m-amount" min="0" step="0.01" value="${pay.amount === null || pay.amount === undefined ? "" : pay.amount}" /></div>
+        <div class="field"><label>Forma de pago</label><select id="m-method">${opts(PAY_METHOD_LABELS, pay.method)}</select></div>
+        <div class="field"><label>Estado del pago</label><select id="m-paystatus">${opts(PAY_STATUS_LABELS, pay.status)}</select></div>
+        <div class="field"><label>Referencia / n.º de comprobante</label><input type="text" id="m-ref" maxlength="120" value="${escapeHtml(pay.reference || "")}" /></div>
+        <div class="field wide"><label>Nota</label><input type="text" id="m-note" maxlength="500" value="${escapeHtml(pay.note || "")}" /></div>
+      </div>
+      <p class="hint" id="m-pay-info" style="margin:8px 0 0;">${pay.exists ? payInfoText(pay) : "Sin pago registrado todavía."}</p>
+      <label style="display:flex;gap:6px;align-items:center;font-size:.82rem;margin-top:8px;"><input type="checkbox" id="m-notify" checked /> Avisar al paciente por WhatsApp al verificar (solo si escribió en las últimas 24 h)</label>
+      <div class="modal-actions">
+        <button class="btn btn-primary" type="button" id="m-verify"><span class="material-symbols-outlined">verified</span>Verificar y guardar</button>
+        <button class="btn" type="button" id="m-save-pay"><span class="material-symbols-outlined">save</span>Guardar pago</button>
+        <button class="btn" type="button" data-close="apt-modal">Cerrar</button>
+      </div>`;
+
+    card.querySelector('[data-close="apt-modal"]').addEventListener("click", () => closeModal("apt-modal"));
+    $("m-price").addEventListener("change", () => { if ($("m-price").value !== "") $("m-amount").value = $("m-price").value; });
+    $("m-open-patient").addEventListener("click", () => {
+      closeModal("apt-modal");
+      showTab("patients");
+      selectPatient(appt.contact_id);
+    });
+    if (live) $("m-send-reminder").addEventListener("click", async () => {
+      if (!confirm("¿Enviar ahora el recordatorio por WhatsApp a este paciente?")) return;
+      try {
+        await api(`/crm/patients/${appt.contact_id}/appointments/${appt.id}/send-reminder`, { method: "POST" });
+        showToast("Recordatorio enviado.");
+        refreshOpenViews();
+      } catch (err) { showToast(err.message || "No se pudo enviar el recordatorio.", true); }
+    });
+    $("m-save-appt").addEventListener("click", async () => {
+      const body = { status: $("m-status").value, therapist_name: $("m-therapist").value };
+      if ($("m-when").value && $("m-when").value !== `${p.ymd}T${pad2(p.hour)}:${pad2(p.minute)}`) body.scheduled_at = clinicLocalDatetimeToUtcIso($("m-when").value);
+      try {
+        await api(`/crm/appointments/${appt.id}`, { method: "PATCH", body: JSON.stringify(body) });
+        showToast("Cita actualizada.");
+        closeModal("apt-modal");
+        refreshOpenViews();
+      } catch (err) { showToast(err.message || "No se pudo actualizar la cita.", true); }
+    });
+    const savePay = async (status) => {
+      try {
+        const res = await api(`/crm/appointments/${appt.id}/payment`, {
+          method: "PUT",
+          body: JSON.stringify({
+            amount: $("m-amount").value === "" ? null : $("m-amount").value,
+            method: $("m-method").value, status,
+            reference: $("m-ref").value, note: $("m-note").value,
+            notify_patient: status === "VERIFIED" && $("m-notify").checked,
+          }),
+        });
+        showToast(status === "VERIFIED" ? (res.patient_notified ? "Pago verificado y paciente avisado." : "Pago verificado.") : "Pago guardado.");
+        closeModal("apt-modal");
+        refreshOpenViews();
+      } catch (err) { showToast(err.message || "No se pudo guardar el pago.", true); }
+    };
+    $("m-save-pay").addEventListener("click", () => savePay($("m-paystatus").value));
+    $("m-verify").addEventListener("click", () => savePay("VERIFIED"));
+  }
+
+  function payInfoText(pay) {
+    const when = (iso) => formatInClinicTime(iso);
+    if (pay.status === "VERIFIED" || pay.status === "REJECTED") return `${PAY_STATUS_LABELS[pay.status]} por ${escapeHtml(pay.verified_by || "—")}${pay.verified_at ? " · " + when(pay.verified_at) : ""}`;
+    if (pay.status === "REPORTED") return `El paciente avisó que pagó${pay.reported_at ? " · " + when(pay.reported_at) : ""}. Revisa el banco y verifica.`;
+    return "Pago registrado, sin confirmar.";
+  }
+
+  $("case-payment-btn").addEventListener("click", () => { if (state.casePaymentAppointment) openAppointmentPanel(state.casePaymentAppointment); });
+
+  // ============================== payments tab ==============================
+
+  async function loadPayments() {
+    if (!$("pay-month").value) $("pay-month").value = clinicToday().slice(0, 7);
+    const month = $("pay-month").value;
+    const qs = new URLSearchParams({ month });
+    if ($("pay-status").value) qs.set("status", $("pay-status").value);
+    if ($("pay-therapist").value) qs.set("therapist", $("pay-therapist").value);
+    $("pay-export").href = `/crm/payments/export.csv?month=${encodeURIComponent(month)}`;
+
+    const curTherapist = $("pay-therapist").value;
+    $("pay-therapist").innerHTML = '<option value="">Todos los terapeutas</option>' +
+      state.therapists.map((t) => `<option value="${escapeHtml(t)}"${t === curTherapist ? " selected" : ""}>${escapeHtml(t)}</option>`).join("");
+
+    try {
+      const data = await api("/crm/payments?" + qs.toString());
+      renderPayments(data);
+    } catch (err) {
+      if (err.status === 401) { showLogin(); return; }
+      showToast(err.message || "No se pudieron cargar los pagos.", true);
+    }
+    loadPriceList();
+  }
+
+  function renderPayments(data) {
+    const st = data.by_status;
+    const kpi = (label, key, cls) => `<div class="kpi"><div class="k-label">${label}</div><div class="k-value">${money(st[key].amount)}</div><div class="k-sub">${st[key].count} pago(s)</div></div>`;
+    $("pay-kpis").innerHTML = kpi("Verificado", "VERIFIED") + kpi("Informado (por verificar)", "REPORTED") + kpi("Pendiente", "PENDING") + kpi("Rechazado", "REJECTED");
+    const list = (obj) => Object.keys(obj).length
+      ? Object.keys(obj).map((k) => `<li><span>${escapeHtml(PAY_METHOD_LABELS[k] || k)}</span><span>${money(obj[k].amount)} · ${obj[k].count}</span></li>`).join("")
+      : '<li style="color:var(--on-surface-variant);">Sin pagos verificados.</li>';
+    $("pay-by-method").innerHTML = list(data.verified_by_method);
+    $("pay-by-therapist").innerHTML = list(data.verified_by_therapist);
+    const wa = $("pay-without-amount");
+    wa.classList.toggle("hidden", !data.without_amount);
+    wa.textContent = data.without_amount ? `${data.without_amount} pago(s) no tienen monto y cuentan como RD$ 0.` : "";
+
+    $("pay-empty").classList.toggle("hidden", data.rows.length > 0);
+    const tbody = $("pay-tbody");
+    tbody.innerHTML = "";
+    data.rows.forEach((r) => {
+      const tr = document.createElement("tr");
+      tr.className = "clickable";
+      tr.innerHTML = `<td>${formatInClinicTime(r.scheduled_at)}</td><td>${escapeHtml(r.patient)}</td><td>${escapeHtml(r.therapist_name)}</td>` +
+        `<td>${money(r.amount)}</td><td>${escapeHtml(PAY_METHOD_LABELS[r.method] || r.method)}</td>` +
+        `<td><span class="pay-badge pay-${r.status}">${PAY_STATUS_LABELS[r.status]}</span></td><td>${escapeHtml(r.reference || "")}</td>`;
+      tr.addEventListener("click", () => openAppointmentPanel(r.appointment_id));
+      tbody.appendChild(tr);
+    });
+  }
+
+  ["pay-month", "pay-status", "pay-therapist"].forEach((id) => $(id).addEventListener("change", loadPayments));
+
+  async function loadPriceList() {
+    try {
+      state.priceItems = await api("/crm/price-items");
+    } catch (e) { return; }
+    const tbody = $("price-tbody");
+    tbody.innerHTML = "";
+    state.priceItems.forEach((it) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${escapeHtml(it.name)}</td>
+        <td><input class="price-input" type="number" min="0" step="0.01" value="${it.amount === null ? "" : it.amount}" placeholder="Sin monto" /></td>
+        <td><input type="checkbox" ${it.is_active ? "checked" : ""} /></td>
+        <td><button type="button" class="btn" style="padding:5px 12px;">Guardar</button></td>`;
+      tr.querySelector("button").addEventListener("click", async () => {
+        const raw = tr.querySelector('input[type="number"]').value;
+        try {
+          await api(`/crm/price-items/${it.id}`, { method: "PUT", body: JSON.stringify({ amount: raw === "" ? null : raw, is_active: tr.querySelector('input[type="checkbox"]').checked }) });
+          showToast("Tarifa guardada.");
+          loadPriceList();
+        } catch (err) { showToast(err.message || "No se pudo guardar.", true); }
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  $("price-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = $("price-new-name").value.trim();
+    if (!name) return;
+    const raw = $("price-new-amount").value;
+    try {
+      await api("/crm/price-items", { method: "POST", body: JSON.stringify({ name, amount: raw === "" ? null : raw }) });
+      $("price-new-name").value = "";
+      $("price-new-amount").value = "";
+      showToast("Servicio agregado.");
+      loadPriceList();
+    } catch (err) { showToast(err.message || "No se pudo agregar.", true); }
+  });
+
   checkSession();
 })();
 </script>

@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -70,6 +70,10 @@ class Appointment(UUIDPKMixin, TenantMixin, TimestampMixin, Base):
     therapist_name: Mapped[str] = mapped_column(String(120), nullable=False)
 
     scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+    # Fixed at 60 minutes for now (the CRM never sets another value); stored
+    # so the agenda can compute overlaps and free slots without guessing.
+    duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=60, server_default="60")
 
     status: Mapped[AppointmentStatus] = mapped_column(
         Enum(AppointmentStatus, name="appointment_status"),
