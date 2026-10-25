@@ -87,12 +87,23 @@ def _handoff(
     return patient_message
 
 
+def _remember_name(conversation: Conversation) -> None:
+    """The name given during new-patient registration becomes the contact's
+    name in the CRM (only if staff have not set one), so the bot can greet by
+    name from then on. It never overwrites a name a staff member typed."""
+    name = ((conversation.intake_data or {}).get("patient_name") or "").strip()
+    contact = conversation.contact
+    if name and contact is not None and not contact.name:
+        contact.name = name[:120]
+
+
 def _intake_turn(
     db: Session,
     conversation: Conversation,
     turn: "intake.IntakeTurn",
     classification: IntentClassificationResult | None = None,
 ) -> OrchestratorResult:
+    _remember_name(conversation)
     if turn.complete:
         _handoff(db, conversation, reason=turn.reason, priority="MEDIUM", patient_message=turn.reply)
     else:
