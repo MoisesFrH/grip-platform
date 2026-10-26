@@ -18,6 +18,7 @@ app = FastAPI(title="ND Neurodiversa — Plataforma conversacional", version="0.
 _SIMULATOR_UI_PATH = Path(__file__).parent / "static" / "simulator.html"
 _DASHBOARD_UI_PATH = Path(__file__).parent / "static" / "dashboard.html"
 _CRM_UI_PATH = Path(__file__).parent / "static" / "crm.html"
+_REGISTRO_UI_PATH = Path(__file__).parent / "static" / "registro.html"
 _BOOTSTRAP_STAFF_UI_PATH = Path(__file__).parent / "static" / "bootstrap_staff.html"
 _GLASS_CSS_PATH = Path(__file__).parent / "static" / "glass.css"
 _PRIVACY_UI_PATH = Path(__file__).parent / "static" / "privacidad.html"
@@ -59,6 +60,9 @@ def dashboard_ui() -> FileResponse:
 def crm_ui() -> FileResponse:
     return FileResponse(_CRM_UI_PATH)
 
+@app.get("/registro/{form_slug}")
+def registro_ui(form_slug: str) -> FileResponse:
+    return FileResponse(_REGISTRO_UI_PATH)
 
 # The form itself is harmless to serve (it's just HTML — no data, no
 # secret) even when STAFF_BOOTSTRAP_SECRET is unset; the actual creation

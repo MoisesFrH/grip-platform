@@ -443,6 +443,20 @@
           </form>
         </div>
  
+        <div class="section" id="forms-section">
+          <div class="panel-header-row">
+            <h3 style="margin:0;">Formularios de registro</h3>
+          </div>
+          <div id="forms-list"></div>
+          <div class="empty-state hidden" id="forms-empty" style="padding:10px 4px;">Aún no hay formularios llenados.</div>
+          <div class="inline-form" style="margin-top:8px;">
+            <span style="font-size:0.8rem;color:var(--on-surface-variant);">Llenar en persona:</span>
+            <a class="btn" id="form-link-senasa" target="_blank" rel="noopener">SeNaSa</a>
+            <a class="btn" id="form-link-patronato" target="_blank" rel="noopener">Patronato</a>
+            <a class="btn" id="form-link-privado" target="_blank" rel="noopener">Privado</a>
+          </div>
+        </div>
+
         <div class="section" id="notes-section">
           <h3>Notas clínicas</h3>
           <div id="notes-locked" class="locked-notice hidden">
@@ -664,6 +678,9 @@
 </div>
 
 <!-- ===== MODAL: appointment + payment ===== -->
+<div class="modal-backdrop hidden" id="form-modal">
+  <div class="modal-card" id="form-modal-card" style="max-width:720px;"></div>
+</div>
 <div class="modal-backdrop hidden" id="apt-modal">
   <div class="modal-card" id="apt-modal-card"></div>
 </div>
@@ -848,6 +865,7 @@
     $("detail-phone").textContent = detail.phone;
     $("detail-status").textContent = CONTACT_STATUS_LABELS[detail.status] || detail.status;
     $("edit-name-form").classList.add("hidden");
+    loadPatientForms(state.selectedPatientId);
  
     // appointments
     const tbody = $("appointments-tbody");
@@ -939,6 +957,58 @@
     }
   }
  
+  // ---------- registration forms (filled in person) ----------
+  const FORM_SLUGS = { SENASA: "senasa", PATRONATO: "patronato", DIRECT: "privado" };
+  async function loadPatientForms(contactId) {
+    ["senasa", "patronato", "privado"].forEach((slug) => {
+      $("form-link-" + slug).href = `/registro/${slug}?contact=${encodeURIComponent(contactId)}`;
+    });
+    const list = $("forms-list");
+    list.innerHTML = "";
+    try {
+      const rows = await api(`/crm/patients/${contactId}/forms`);
+      $("forms-empty").classList.toggle("hidden", rows.length > 0);
+      rows.forEach((r) => {
+        const d = document.createElement("div");
+        d.className = "inline-form";
+        d.style.cssText = "justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--surface-container-high);";
+        d.innerHTML = `<span><strong>${escapeHtml(r.title.split(" — ")[1] || r.title)}</strong><br><span style="font-size:0.78rem;color:var(--on-surface-variant);">${escapeHtml(r.child_name)} · ${formatInClinicTime(r.created_at)}${r.filled_by ? " · " + escapeHtml(r.filled_by) : ""}</span></span>`;
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "btn"; b.textContent = "Ver respuestas";
+        b.addEventListener("click", () => openFormModal(r.id));
+        d.appendChild(b);
+        list.appendChild(d);
+      });
+    } catch (e) {
+      $("forms-empty").classList.remove("hidden");
+    }
+  }
+
+  async function openFormModal(formId) {
+    const card = $("form-modal-card");
+    card.innerHTML = "<p>Cargando…</p>";
+    openModal("form-modal");
+    try {
+      const f = await api(`/crm/forms/${formId}`);
+      let html = `<h2>${escapeHtml(f.title)}</h2><div class="sub">${escapeHtml(f.child_name)} · ${formatInClinicTime(f.created_at)}${f.filled_by ? " · registró " + escapeHtml(f.filled_by) : ""}</div>`;
+      f.schema.sections.forEach((sec) => {
+        const rows = sec.fields.filter((fl) => f.answers[fl.key] !== undefined).map((fl) => {
+          const v = f.answers[fl.key];
+          const text = Array.isArray(v) ? v.join(", ") : v;
+          return `<tr><td style="width:46%;color:var(--on-surface-variant);">${escapeHtml(fl.label)}</td><td>${escapeHtml(String(text))}</td></tr>`;
+        });
+        if (!rows.length) return;
+        html += `<h4>${escapeHtml(sec.title)}</h4><table class="data-table"><tbody>${rows.join("")}</tbody></table>`;
+      });
+      html += `<div class="modal-actions"><button class="btn" type="button" data-close="form-modal">Cerrar</button></div>`;
+      card.innerHTML = html;
+      card.querySelector("[data-close]").addEventListener("click", () => closeModal("form-modal"));
+    } catch (e) {
+      card.innerHTML = `<p>${escapeHtml(e.message)}</p><div class="modal-actions"><button class="btn" type="button" id="form-close-err">Cerrar</button></div>`;
+      $("form-close-err").addEventListener("click", () => closeModal("form-modal"));
+    }
+  }
+
   async function updateAppointmentStatus(appointmentId, status) {
     try {
       await api(`/crm/appointments/${appointmentId}`, { method: "PATCH", body: JSON.stringify({ status }) });
@@ -1306,7 +1376,7 @@
   function openModal(id) { $(id).classList.remove("hidden"); }
   function closeModal(id) { $(id).classList.add("hidden"); }
   document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => closeModal(b.dataset.close)));
-  ["new-apt-modal", "apt-modal"].forEach((id) => $(id).addEventListener("click", (e) => { if (e.target === $(id)) closeModal(id); }));
+  ["new-apt-modal", "apt-modal", "form-modal"].forEach((id) => $(id).addEventListener("click", (e) => { if (e.target === $(id)) closeModal(id); }));
 
   async function loadTherapists() {
     try {

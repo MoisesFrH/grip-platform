@@ -46,8 +46,10 @@ from app.api.routes.crm_deps import (  # noqa: E402  (shared with crm_billing)
 router = APIRouter(prefix="/crm", tags=["crm"])
 
 from app.api.routes import crm_billing  # noqa: E402
+from app.api.routes import crm_forms  # noqa: E402
 
 router.include_router(crm_billing.router)
+router.include_router(crm_forms.router)
 
 
 # --- auth dependencies -----------------------------------------------------
