@@ -66,6 +66,19 @@ def _history_for_gemini(conversation: Conversation) -> list[dict[str, str]]:
     return history
 
 
+_HANDOFF_PROMISES = (
+    "te conecto con", "te paso con", "te derivo", "te comunico con", "te pongo en contacto",
+    "conecto con el equipo", "te contactará el equipo", "te contactara el equipo",
+)
+
+
+def _promises_handoff(text: str) -> bool:
+    """True when the bot's own answer says it will pass the patient to a
+    person. Without this the CRM never gets a case to claim."""
+    lowered = (text or "").lower()
+    return any(phrase in lowered for phrase in _HANDOFF_PROMISES)
+
+
 def _handoff(
     db: Session,
     conversation: Conversation,
@@ -347,7 +360,18 @@ def process_inbound_message(
                 )
                 reply_text = answer.text
                 tools_used = answer.tools_used
-                crm.record_outbound_message(db, conversation, reply_text, sender=MessageSender.BOT)
+                if _promises_handoff(reply_text):
+                    # The bot told the patient "te conecto con el equipo": make
+                    # it true, so the case shows up in the CRM with "Tomar".
+                    reply_text = _handoff(
+                        db,
+                        conversation,
+                        reason=f"El bot no tenía el dato ({classification.primary_intent.value}) y ofreció pasar con el equipo",
+                        priority="MEDIUM",
+                        patient_message=reply_text,
+                    )
+                else:
+                    crm.record_outbound_message(db, conversation, reply_text, sender=MessageSender.BOT)
             except Exception:
                 # Fail closed: any Gemini failure (network, unsupported
                 # intent, malformed response) becomes a human handoff,
