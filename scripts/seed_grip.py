@@ -120,3 +120,6 @@ def seed() -> Tenant:
  
 if __name__ == "__main__":
     seed()
+    from scripts.seed_demo_forms import main as seed_demo_forms
+
+    seed_demo_forms()
