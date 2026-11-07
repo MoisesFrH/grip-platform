@@ -155,6 +155,17 @@
     border-bottom: 2px solid transparent; margin-bottom: -1px;
   }
   .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .chip { display:inline-flex; align-items:center; gap:4px; padding:2px 10px; border-radius:999px; font-size:0.74rem; font-weight:700; }
+  .chip.ok { background:#d8f3e4; color:#1f7a4d; }
+  .chip.warn { background:var(--error-container); color:var(--on-error-container); }
+  .chip.wait { background:var(--tertiary-fixed); color:var(--tertiary); }
+  .chip.info { background:var(--primary-fixed); color:var(--primary); }
+  .qr-box { text-align:center; }
+  .qr-box img { width:min(300px,70vw); height:auto; border:1px solid var(--surface-container-highest); border-radius:16px; padding:10px; background:#fff; }
+  .link-box { word-break:break-all; font-size:0.78rem; background:var(--surface-container-low); border-radius:10px; padding:8px 10px; margin:10px 0; }
+  .sig-img { max-width:260px; border:1px solid var(--surface-container-highest); border-radius:10px; background:#fff; }
+  .consent-text { white-space:pre-wrap; font-size:0.85rem; max-height:260px; overflow:auto; background:var(--surface-container-low); border-radius:10px; padding:10px 12px; }
+  @media print { body * { visibility:hidden; } #consent-modal-card, #consent-modal-card * { visibility:visible; } #consent-modal-card { position:absolute; left:0; top:0; width:100%; box-shadow:none; } .no-print { display:none !important; } }
   .tab-badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--error); color: #fff; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
   .tab-btn.alert { color: var(--error); animation: tabPulse 1.2s ease-in-out infinite; }
   .tab-btn.alert .tab-badge { animation: badgePop 1.2s ease-in-out infinite; }
@@ -476,6 +487,21 @@
           </div>
         </div>
 
+        <div class="section" id="consent-section">
+          <div class="panel-header-row">
+            <h3 style="margin:0;">Consentimiento informado</h3>
+            <span id="consent-chip"></span>
+          </div>
+          <div id="consent-body"></div>
+        </div>
+
+        <div class="section" id="referral-section">
+          <div class="panel-header-row">
+            <h3 style="margin:0;">Referencias</h3>
+          </div>
+          <div id="referral-body"></div>
+        </div>
+
         <div class="section" id="notes-section">
           <h3>Notas clínicas</h3>
           <div id="notes-locked" class="locked-notice hidden">
@@ -701,6 +727,9 @@
 </div>
 
 <!-- ===== MODAL: appointment + payment ===== -->
+<div class="modal-backdrop hidden" id="consent-modal">
+  <div class="modal-card" id="consent-modal-card" style="max-width:520px;"></div>
+</div>
 <div class="modal-backdrop hidden" id="form-modal">
   <div class="modal-card" id="form-modal-card" style="max-width:720px;"></div>
 </div>
@@ -894,6 +923,8 @@
     $("detail-status").textContent = CONTACT_STATUS_LABELS[detail.status] || detail.status;
     $("edit-name-form").classList.add("hidden");
     loadPatientForms(state.selectedPatientId);
+    loadPatientConsent(state.selectedPatientId);
+    loadPatientReferrals(state.selectedPatientId);
  
     // appointments
     const tbody = $("appointments-tbody");
@@ -1035,6 +1066,182 @@
       card.innerHTML = `<p>${escapeHtml(e.message)}</p><div class="modal-actions"><button class="btn" type="button" id="form-close-err">Cerrar</button></div>`;
       $("form-close-err").addEventListener("click", () => closeModal("form-modal"));
     }
+  }
+
+  // ---------- consent (QR signing) ----------
+  let consentPoll = null;
+  function stopConsentPoll() { if (consentPoll) clearInterval(consentPoll); consentPoll = null; }
+
+  async function loadPatientConsent(contactId) {
+    const body = $("consent-body"), chip = $("consent-chip");
+    body.innerHTML = "";
+    try {
+      const c = await api(`/crm/patients/${contactId}/consent`);
+      if (c.status === "SIGNED") {
+        chip.innerHTML = '<span class="chip ok">Firmado</span>';
+        body.innerHTML = `<div style="font-size:0.85rem;">Firmado por <strong>${escapeHtml(c.signer_name)}</strong> (${escapeHtml(c.signer_relation)}) · ${formatInClinicTime(c.signed_at)}</div>`;
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "btn"; b.style.marginTop = "8px"; b.textContent = "Ver consentimiento firmado";
+        b.addEventListener("click", () => openConsentView(contactId, c));
+        body.appendChild(b);
+      } else {
+        chip.innerHTML = c.status === "PENDING" ? '<span class="chip wait">Pendiente de firma</span>' : '<span class="chip warn">Sin firmar</span>';
+        body.innerHTML = '<div style="font-size:0.85rem;color:var(--on-surface-variant);">Debe firmarse una sola vez, antes de empezar el tratamiento.</div>';
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "btn btn-primary"; b.style.marginTop = "8px";
+        b.innerHTML = '<span class="material-symbols-outlined">qr_code_2</span> ' + (c.status === "PENDING" ? "Mostrar QR de firma" : "Generar QR de firma");
+        b.addEventListener("click", () => openConsentQr(contactId));
+        body.appendChild(b);
+      }
+    } catch (e) {
+      chip.innerHTML = "";
+    }
+  }
+
+  async function openConsentQr(contactId) {
+    const card = $("consent-modal-card");
+    card.innerHTML = "<p>Generando…</p>";
+    openModal("consent-modal");
+    try {
+      const c = await api(`/crm/patients/${contactId}/consent/link`, { method: "POST" });
+      card.innerHTML = `
+        <h2>Firma del consentimiento</h2>
+        <div class="sub">Pídele al familiar que escanee este código con la cámara de su teléfono.</div>
+        <div class="qr-box"><img alt="Código QR" src="/crm/patients/${contactId}/consent/qr.svg?t=${Date.now()}" /></div>
+        <div class="link-box" id="consent-link-text">${escapeHtml(c.url)}</div>
+        <div class="modal-actions no-print">
+          <button class="btn" type="button" id="consent-copy">Copiar enlace</button>
+          <button class="btn" type="button" id="consent-print">Imprimir</button>
+          <button class="btn" type="button" id="consent-close">Cerrar</button>
+        </div>
+        <div id="consent-wait" class="sub" style="margin-top:8px;">Esperando la firma…</div>`;
+      $("consent-copy").addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(c.url); showToast("Enlace copiado."); } catch (e) { showToast("No se pudo copiar. Selecciónalo manualmente.", true); }
+      });
+      $("consent-print").addEventListener("click", () => window.print());
+      $("consent-close").addEventListener("click", () => { stopConsentPoll(); closeModal("consent-modal"); });
+      stopConsentPoll();
+      consentPoll = setInterval(async () => {
+        if ($("consent-modal").classList.contains("hidden")) { stopConsentPoll(); return; }
+        try {
+          const st = await api(`/crm/patients/${contactId}/consent`);
+          if (st.status === "SIGNED") {
+            stopConsentPoll();
+            $("consent-wait").innerHTML = '<span class="chip ok">✓ Firmado por ' + escapeHtml(st.signer_name) + "</span>";
+            showToast("¡Consentimiento firmado!");
+            loadPatientConsent(contactId);
+            loadPatientReferrals(contactId);
+          }
+        } catch (e) { /* keep waiting */ }
+      }, 3000);
+    } catch (e) {
+      card.innerHTML = `<p>${escapeHtml(e.message)}</p><div class="modal-actions"><button class="btn" type="button" id="consent-close-err">Cerrar</button></div>`;
+      $("consent-close-err").addEventListener("click", () => closeModal("consent-modal"));
+    }
+  }
+
+  function openConsentView(contactId, c) {
+    const card = $("consent-modal-card");
+    card.innerHTML = `
+      <h2>Consentimiento firmado</h2>
+      <div class="sub">${escapeHtml(c.child_name || "")} · firmado por ${escapeHtml(c.signer_name)} (${escapeHtml(c.signer_relation)}) · ${formatInClinicTime(c.signed_at)} · texto ${escapeHtml(c.version || "")}</div>
+      <div class="consent-text">${escapeHtml(c.text || "")}</div>
+      <p style="margin:10px 0 4px;font-size:0.8rem;color:var(--on-surface-variant);">Firma</p>
+      <img class="sig-img" alt="Firma" src="/crm/patients/${contactId}/consent/signature.png" />
+      <div class="modal-actions no-print">
+        <button class="btn" type="button" id="consent-print2">Imprimir</button>
+        <button class="btn" type="button" id="consent-close2">Cerrar</button>
+      </div>`;
+    $("consent-print2").addEventListener("click", () => window.print());
+    $("consent-close2").addEventListener("click", () => closeModal("consent-modal"));
+    openModal("consent-modal");
+  }
+
+  // ---------- referrals ----------
+
+  async function loadPatientReferrals(contactId) {
+    const box = $("referral-body");
+    box.innerHTML = "";
+    let data;
+    try { data = await api(`/crm/patients/${contactId}/referrals`); } catch (e) { return; }
+    const rec = data.received;
+    const others = state.patients.filter((p) => p.id !== contactId);
+    const label = (p) => `${p.name || "(sin nombre)"} · ${p.phone}`;
+
+    let html = '<div style="font-size:0.8rem;font-weight:600;color:var(--on-surface-variant);margin-bottom:6px;">¿Cómo nos conoció?</div>';
+    if (rec && rec.reward_status === "APPLIED") {
+      html += `<div style="font-size:0.85rem;">${escapeHtml(rec.source_label)}${rec.person ? ": <strong>" + escapeHtml(rec.person.name || rec.person.phone) + "</strong>" : ""}</div>`;
+    } else {
+      html += `<div class="inline-form" style="flex-wrap:wrap;gap:6px;">
+        <select id="ref-source"><option value="">Elige…</option>${data.sources.map((s) => `<option value="${s.key}"${rec && rec.source === s.key ? " selected" : ""}>${escapeHtml(s.label)}</option>`).join("")}</select>
+        <input id="ref-person" list="ref-people" placeholder="Busca al paciente que lo refirió" style="${rec && rec.source === "PATIENT" ? "" : "display:none;"}min-width:220px;" value="${rec && rec.person ? escapeHtml((rec.person.name || "") + " · " + rec.person.phone) : ""}" />
+        <datalist id="ref-people">${others.map((p) => `<option value="${escapeHtml(label(p))}"></option>`).join("")}</datalist>
+        <input id="ref-detail" placeholder="Detalle (opcional)" value="${rec && rec.detail ? escapeHtml(rec.detail) : ""}" />
+        <button class="btn btn-primary" type="button" id="ref-save">Guardar</button>
+      </div>`;
+    }
+    if (rec) {
+      const cls = rec.reward_status === "EARNED" ? "ok" : rec.reward_status === "APPLIED" ? "info" : rec.reward_status === "PENDING_CONSENT" ? "wait" : "";
+      if (rec.source === "PATIENT") html += `<div style="margin-top:6px;"><span class="chip ${cls}">${escapeHtml(rec.reward_label)}</span></div>`;
+    }
+
+    html += '<div style="font-size:0.8rem;font-weight:600;color:var(--on-surface-variant);margin:14px 0 6px;">Personas que refirió</div>';
+    if (data.made.length === 0) {
+      html += '<div style="font-size:0.85rem;color:var(--on-surface-variant);">Todavía no ha referido a nadie.</div>';
+    } else {
+      if (data.earned_count > 0) html += `<div class="alert-banner" style="margin-bottom:8px;"><span class="material-symbols-outlined">redeem</span>${data.earned_count} descuento${data.earned_count > 1 ? "s" : ""} por aplicar</div>`;
+      data.made.forEach((r) => {
+        const cls = r.reward_status === "EARNED" ? "ok" : r.reward_status === "APPLIED" ? "info" : "wait";
+        html += `<div class="inline-form" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--surface-container-high);">
+          <span><strong>${escapeHtml(r.person ? (r.person.name || r.person.phone) : "—")}</strong><br><span class="chip ${cls}">${escapeHtml(r.reward_label)}</span>${r.discount_note ? `<span style="font-size:0.78rem;color:var(--on-surface-variant);"> · ${escapeHtml(r.discount_note)}</span>` : ""}</span>
+          ${r.reward_status === "EARNED" ? `<button class="btn btn-primary" type="button" data-apply="${r.id}">Marcar descuento aplicado</button>` : ""}
+        </div>`;
+      });
+    }
+    box.innerHTML = html;
+
+    const sourceEl = $("ref-source");
+    if (sourceEl) {
+      sourceEl.addEventListener("change", () => { $("ref-person").style.display = sourceEl.value === "PATIENT" ? "" : "none"; });
+      $("ref-save").addEventListener("click", async () => {
+        const source = sourceEl.value;
+        if (!source) { showToast("Elige cómo nos conoció.", true); return; }
+        let referrerId = null;
+        if (source === "PATIENT") {
+          const match = others.find((p) => label(p) === $("ref-person").value);
+          if (!match) { showToast("Elige al paciente de la lista.", true); return; }
+          referrerId = match.id;
+        }
+        try {
+          await api(`/crm/patients/${contactId}/referral`, { method: "PUT", body: JSON.stringify({ source, referrer_contact_id: referrerId, detail: $("ref-detail").value }) });
+          showToast("Referencia guardada.");
+          loadPatientReferrals(contactId);
+        } catch (e) { showToast(e.message || "No se pudo guardar.", true); }
+      });
+    }
+    box.querySelectorAll("[data-apply]").forEach((b) => b.addEventListener("click", () => openApplyDiscount(b.dataset.apply, contactId)));
+  }
+
+  function openApplyDiscount(referralId, contactId) {
+    const card = $("consent-modal-card");
+    card.innerHTML = `
+      <h2>Aplicar descuento</h2>
+      <div class="sub">Anota qué descuento se dio (por ejemplo: «10 % en la sesión del 20 de noviembre»).</div>
+      <textarea id="discount-note" rows="3" style="width:100%;margin-top:8px;"></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-primary" type="button" id="discount-save">Guardar</button>
+        <button class="btn" type="button" id="discount-cancel">Cancelar</button>
+      </div>`;
+    $("discount-cancel").addEventListener("click", () => closeModal("consent-modal"));
+    $("discount-save").addEventListener("click", async () => {
+      try {
+        await api(`/crm/referrals/${referralId}/apply`, { method: "POST", body: JSON.stringify({ note: $("discount-note").value }) });
+        closeModal("consent-modal");
+        showToast("Descuento registrado.");
+        loadPatientReferrals(contactId);
+      } catch (e) { showToast(e.message || "No se pudo guardar.", true); }
+    });
+    openModal("consent-modal");
   }
 
   async function updateAppointmentStatus(appointmentId, status) {
@@ -1482,7 +1689,7 @@
   function openModal(id) { $(id).classList.remove("hidden"); }
   function closeModal(id) { $(id).classList.add("hidden"); }
   document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => closeModal(b.dataset.close)));
-  ["new-apt-modal", "apt-modal", "form-modal"].forEach((id) => $(id).addEventListener("click", (e) => { if (e.target === $(id)) closeModal(id); }));
+  ["new-apt-modal", "apt-modal", "form-modal", "consent-modal"].forEach((id) => $(id).addEventListener("click", (e) => { if (e.target === $(id)) closeModal(id); }));
 
   async function loadTherapists() {
     try {

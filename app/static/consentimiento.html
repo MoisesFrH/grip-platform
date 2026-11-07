@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>ND Neurodiversa — Consentimiento informado</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root { --primary:#1d3375; --accent:#e87722; --bg:#f4f6fb; --card:#fff; --line:#d5dbea; --muted:#5b6585; --ok:#1f7a4d; --err:#b3261e; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:linear-gradient(180deg,#eef2fb 0%,#fbf4ee 100%); min-height:100vh; color:#1b2142; font-family:"Plus Jakarta Sans",system-ui,sans-serif; line-height:1.5; }
+  header { background:var(--primary); color:#fff; padding:20px 18px 22px; text-align:center; }
+  .mark { width:44px; height:44px; border-radius:12px; background:#fff; color:var(--primary); font-weight:700; display:inline-flex; align-items:center; justify-content:center; margin-bottom:8px; }
+  header h1 { margin:0; font-size:1.15rem; }
+  header p { margin:4px 0 0; font-size:.85rem; opacity:.85; }
+  main { max-width:640px; margin:0 auto; padding:16px 14px 60px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; margin-bottom:14px; box-shadow:0 4px 18px rgba(29,51,117,.07); }
+  .card h2 { margin:0 0 10px; font-size:1rem; color:var(--primary); }
+  .clause { margin:0 0 12px; }
+  .clause b { display:block; font-size:.9rem; color:var(--primary); }
+  .clause span { font-size:.92rem; }
+  label.lbl { display:block; font-size:.8rem; font-weight:600; color:var(--muted); margin:12px 0 4px; }
+  input[type=text], select { width:100%; padding:12px; border:1px solid var(--line); border-radius:10px; font:inherit; font-size:1rem; background:#fff; }
+  input:focus, select:focus { outline:2px solid #9db2f0; border-color:#9db2f0; }
+  .check { display:flex; gap:10px; align-items:flex-start; margin-top:16px; font-size:.92rem; }
+  .check input { width:22px; height:22px; margin-top:2px; accent-color:var(--primary); flex-shrink:0; }
+  .sigwrap { position:relative; border:2px dashed #9db2f0; border-radius:12px; background:#fbfcff; }
+  canvas { display:block; width:100%; height:170px; touch-action:none; border-radius:10px; }
+  .sig-hint { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#a3aed0; pointer-events:none; font-size:.95rem; }
+  .row { display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
+  button { font:inherit; font-weight:600; border-radius:12px; padding:14px 22px; border:1px solid var(--primary); background:var(--primary); color:#fff; font-size:1rem; cursor:pointer; width:100%; margin-top:16px; }
+  button.link { background:none; border:none; color:var(--primary); padding:4px 2px; width:auto; margin:0; font-size:.85rem; text-decoration:underline; }
+  button:disabled { opacity:.55; }
+  .msg { text-align:center; padding:30px 12px; }
+  .msg h2 { color:var(--ok); margin:10px 0 6px; }
+  .msg.err h2 { color:var(--err); }
+  .error { color:var(--err); font-size:.88rem; margin-top:10px; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="mark">ND</div>
+  <h1 id="clinic">ND Neurodiversa</h1>
+  <p>Consentimiento informado</p>
+</header>
+<main id="main"><div class="card msg">Cargando…</div></main>
+
+<script>
+(function () {
+  var token = location.pathname.split("/").filter(Boolean).pop();
+  var main = document.getElementById("main");
+
+  function esc(t) { var d = document.createElement("div"); d.textContent = t == null ? "" : String(t); return d.innerHTML; }
+  function show(kind, title, text) {
+    main.innerHTML = '<div class="card msg ' + (kind === "err" ? "err" : "") + '"><div style="font-size:2.2rem">' + (kind === "err" ? "⚠️" : "✅") + "</div><h2>" + esc(title) + "</h2><p>" + esc(text) + "</p></div>";
+    window.scrollTo(0, 0);
+  }
+
+  async function init() {
+    var res = await fetch("/consentimiento/api/" + encodeURIComponent(token));
+    if (!res.ok) return show("err", "Enlace no válido", "Pide un enlace nuevo en la recepción del centro.");
+    var info = await res.json();
+    document.getElementById("clinic").textContent = info.clinic_name;
+    if (info.signed) return show("ok", "Ya firmaste este consentimiento", "No necesitas hacer nada más. ¡Gracias!");
+    render(info);
+  }
+
+  function render(info) {
+    var clauses = info.paragraphs.map(function (p) {
+      return '<p class="clause"><b>' + esc(p.title) + "</b><span>" + esc(p.body) + "</span></p>";
+    }).join("");
+    var options = info.relations.map(function (r) { return "<option>" + esc(r) + "</option>"; }).join("");
+    main.innerHTML =
+      '<div class="card"><h2>' + esc(info.title) + "</h2>" + clauses + "</div>" +
+      '<div class="card"><h2>Tus datos y tu firma</h2>' +
+      '<label class="lbl" for="child">Nombre completo del niño o niña</label><input type="text" id="child" autocomplete="off" value="' + esc(info.child_name) + '" />' +
+      '<label class="lbl" for="signer">Tu nombre completo</label><input type="text" id="signer" autocomplete="name" />' +
+      '<label class="lbl" for="rel">Parentesco con el niño o niña</label><select id="rel"><option value="">Elige…</option>' + options + "</select>" +
+      '<label class="lbl">Firma (dibújala con el dedo)</label>' +
+      '<div class="sigwrap"><canvas id="sig"></canvas><div class="sig-hint" id="sig-hint">Firma aquí</div></div>' +
+      '<div class="row"><span></span><button type="button" class="link" id="clear">Borrar firma</button></div>' +
+      '<label class="check"><input type="checkbox" id="accept" /><span>He leído el consentimiento, lo comprendo y lo firmo de forma voluntaria.</span></label>' +
+      '<div class="error hidden" id="err"></div>' +
+      '<button type="button" id="send">Firmar consentimiento</button></div>';
+    setupCanvas();
+    document.getElementById("send").addEventListener("click", submit);
+  }
+
+  var canvas, ctx, drawing = false, hasInk = false;
+  function setupCanvas() {
+    canvas = document.getElementById("sig");
+    var ratio = Math.max(window.devicePixelRatio || 1, 1);
+    var rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * ratio; canvas.height = rect.height * ratio;
+    ctx = canvas.getContext("2d");
+    ctx.scale(ratio, ratio);
+    ctx.lineWidth = 2.6; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#14224f";
+    function pos(e) { var r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+    canvas.addEventListener("pointerdown", function (e) {
+      drawing = true; canvas.setPointerCapture(e.pointerId);
+      var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + 0.01, p.y + 0.01); ctx.stroke();
+      hasInk = true; document.getElementById("sig-hint").classList.add("hidden");
+    });
+    canvas.addEventListener("pointermove", function (e) { if (!drawing) return; var p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+    ["pointerup", "pointercancel", "pointerleave"].forEach(function (ev) { canvas.addEventListener(ev, function () { drawing = false; }); });
+    document.getElementById("clear").addEventListener("click", function () {
+      ctx.clearRect(0, 0, canvas.width, canvas.height); hasInk = false; document.getElementById("sig-hint").classList.remove("hidden");
+    });
+  }
+
+  function fail(msg) { var e = document.getElementById("err"); e.textContent = msg; e.classList.remove("hidden"); e.scrollIntoView({ block: "center", behavior: "smooth" }); }
+
+  async function submit() {
+    var btn = document.getElementById("send");
+    document.getElementById("err").classList.add("hidden");
+    if (!document.getElementById("child").value.trim()) return fail("Escribe el nombre del niño o niña.");
+    if (document.getElementById("signer").value.trim().split(/\s+/).length < 2) return fail("Escribe tu nombre completo.");
+    if (!document.getElementById("rel").value) return fail("Indica tu parentesco con el niño o niña.");
+    if (!hasInk) return fail("Dibuja tu firma en el recuadro.");
+    if (!document.getElementById("accept").checked) return fail("Marca que leíste y aceptas el consentimiento.");
+    btn.disabled = true; btn.textContent = "Enviando…";
+    try {
+      var res = await fetch("/consentimiento/api/" + encodeURIComponent(token) + "/firmar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signer_name: document.getElementById("signer").value, relation: document.getElementById("rel").value,
+          child_name: document.getElementById("child").value, accepted: true, signature: canvas.toDataURL("image/png")
+        })
+      });
+      var data = {}; try { data = await res.json(); } catch (x) {}
+      if (!res.ok) throw new Error(data.detail || "No se pudo guardar la firma.");
+      show("ok", "¡Gracias! Consentimiento firmado", "Ya puedes avisar en recepción. Puedes cerrar esta página.");
+    } catch (e) {
+      btn.disabled = false; btn.textContent = "Firmar consentimiento"; fail(e.message);
+    }
+  }
+
+  init().catch(function () { show("err", "No se pudo cargar", "Revisa tu conexión e intenta de nuevo."); });
+})();
+</script>
+</body>
+</html>

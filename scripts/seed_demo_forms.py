@@ -12,12 +12,21 @@ Manual usage:
     SEED_DEMO_FORMS=1 python -m scripts.seed_demo_forms
 """
 
+import math
 import os
+import secrets
+import struct
+import zlib
+from datetime import datetime, timedelta, timezone
 
 from app.core.db import SessionLocal
+from app.models.consent import ConsentRecord
 from app.models.contact import Contact
+from app.models.referral import Referral
 from app.models.registration import RegistrationForm
 from app.models.tenant import Tenant
+from app.services import consent as consent_service
+from app.services import referrals as referral_service
 from app.services import registration_forms as forms
 
 COMMON = {
@@ -84,6 +93,66 @@ DEMO = [
 ]
 
 
+def _signature_png(seed: int) -> bytes:
+    """A small hand-written-looking squiggle as a PNG (no image library needed)."""
+    w, h = 300, 100
+    pixels = [[255] * w for _ in range(h)]
+    for x in range(10, w - 10):
+        t = (x - 10) / (w - 20)
+        y = int(h / 2 + math.sin(t * (9 + seed) * math.pi) * (22 - 12 * t) + math.sin(t * 3 + seed) * 8)
+        for dy in range(-1, 2):
+            if 0 <= y + dy < h:
+                pixels[y + dy][x] = 30
+    raw = b"".join(b"\x00" + bytes(row) for row in pixels)
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        body = kind + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 0, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw))
+        + chunk(b"IEND", b"")
+    )
+
+
+# Consent + referral story for the demo (by phone):
+#  - Valentina signed the consent;
+#  - Mateo was referred by Valentina and signed -> Valentina has a discount to apply;
+#  - Sofía has NOT signed yet -> use her to show the live QR flow, and found us on Instagram.
+SIGNED = {
+    "+15550100003": ("Marisol Cruz Peña", "Madre", 2),
+    "+15550100002": ("Ana Gil Marte", "Madre", 5),
+}
+
+
+def _ensure_consent_and_referrals(db, tenant, contacts_by_phone) -> None:
+    now = datetime.now(timezone.utc)
+    for phone, (signer, relation, seed) in SIGNED.items():
+        contact = contacts_by_phone[phone]
+        if db.query(ConsentRecord).filter(ConsentRecord.contact_id == contact.id).first() is None:
+            db.add(ConsentRecord(
+                tenant_id=tenant.id, contact_id=contact.id, token=secrets.token_urlsafe(24), created_by="Demo",
+                signed_at=now - timedelta(days=2 + seed), signer_name=signer, signer_relation=relation,
+                child_name=contact.name, text_version=consent_service.CONSENT_VERSION,
+                text_snapshot=consent_service.consent_text(), signature_png=_signature_png(seed),
+            ))
+    db.flush()
+
+    valentina, mateo, sofia = (contacts_by_phone[p] for p in ("+15550100003", "+15550100002", "+15550100001"))
+    if db.query(Referral).filter(Referral.referred_contact_id == mateo.id).first() is None:
+        referral_service.set_referral(
+            db, tenant_id=tenant.id, referred=mateo, source=referral_service.PATIENT,
+            referrer=valentina, detail="Son vecinos y tienen la misma escuela.", staff_name="Demo",
+        )
+    if db.query(Referral).filter(Referral.referred_contact_id == sofia.id).first() is None:
+        referral_service.set_referral(
+            db, tenant_id=tenant.id, referred=sofia, source="SOCIAL",
+            referrer=None, detail="Vio un video en Instagram.", staff_name="Demo",
+        )
+
+
 def main() -> None:
     if os.environ.get("SEED_DEMO_FORMS") != "1":
         print("seed_demo_forms: SEED_DEMO_FORMS no está en 1, no se crea nada.")
@@ -91,20 +160,25 @@ def main() -> None:
     db = SessionLocal()
     try:
         tenant = db.query(Tenant).filter(Tenant.slug == "grip").one()
+        contacts_by_phone = {}
         for item in DEMO:
             contact = db.query(Contact).filter(Contact.tenant_id == tenant.id, Contact.phone == item["phone"]).one_or_none()
-            if contact is not None:
+            if contact is None:
+                contact = Contact(tenant_id=tenant.id, phone=item["phone"], name=item["name"])
+                db.add(contact)
+                db.flush()
+                print(f"creado: {item['name']} ({item['type']})")
+            else:
                 print(f"ya existe: {item['name']}")
-                continue
-            contact = Contact(tenant_id=tenant.id, phone=item["phone"], name=item["name"])
-            db.add(contact)
-            db.flush()
-            answers = forms.clean_answers(item["type"], {**COMMON, **item["answers"]})
-            db.add(RegistrationForm(
-                tenant_id=tenant.id, contact_id=contact.id, form_type=item["type"],
-                child_name=answers["child_name"], answers=answers, filled_by="Demo",
-            ))
-            print(f"creado: {item['name']} ({item['type']})")
+            contacts_by_phone[item["phone"]] = contact
+            has_form = db.query(RegistrationForm).filter(RegistrationForm.contact_id == contact.id).first()
+            if has_form is None:
+                answers = forms.clean_answers(item["type"], {**COMMON, **item["answers"]})
+                db.add(RegistrationForm(
+                    tenant_id=tenant.id, contact_id=contact.id, form_type=item["type"],
+                    child_name=answers["child_name"], answers=answers, filled_by="Demo",
+                ))
+        _ensure_consent_and_referrals(db, tenant, contacts_by_phone)
         db.commit()
     finally:
         db.close()
