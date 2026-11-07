@@ -20,7 +20,6 @@ from app.models.contact import Contact
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.message import Message, MessageDirection, MessageSender, MessageStatus
 from app.models.tenant import Tenant
-from app.api.routes import crm_consent, crm_referrals  # noqa: E402
 
 
 def normalize_whatsapp_address(raw: str) -> str:
