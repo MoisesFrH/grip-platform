@@ -775,7 +775,7 @@
   function enterWorkspace() {
     $("login-view").classList.add("hidden");
     $("tab-bar").classList.remove("hidden");
-    showTab("cases");
+    showTab(location.hash === "#dashboard" ? "dashboard" : "cases");
     startCaseWatcher();
     $("staff-box").classList.remove("hidden");
     $("staff-name").textContent = state.staff.display_name;
@@ -798,6 +798,7 @@
     if (name === "agenda") loadAgenda();
     if (name === "payments") loadPayments();
     if (name === "dashboard" && !$("dashboard-frame").getAttribute("src")) $("dashboard-frame").setAttribute("src", "/dashboard");
+    try { history.replaceState(null, "", name === "dashboard" ? "#dashboard" : location.pathname + location.search); } catch (e) {}
   }
   Object.keys(TABS).forEach((key) => $("tab-btn-" + key).addEventListener("click", () => showTab(key)));
 

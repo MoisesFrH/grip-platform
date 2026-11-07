@@ -428,6 +428,18 @@
     font-size: 0.72rem;
   }
   footer .material-symbols-outlined { font-size: 14px; color: var(--primary); }
+  /* ---------- embedded in the CRM: no duplicate branding, blend with the CRM background ---------- */
+  html.embedded body { background: transparent; }
+  html.embedded header { position: static; background: transparent; border-bottom: none; backdrop-filter: none; }
+  html.embedded .header-inner { padding: 4px 4px 0; }
+  html.embedded .brand, html.embedded .badge-pill { display: none; }
+  html.embedded .header-top { justify-content: flex-end; }
+  html.embedded .header-sub { margin-top: -34px; }
+  html.embedded main { padding: 14px 4px 20px; }
+  html.embedded footer { padding: 0 4px 20px; }
+  html.embedded .panel, html.embedded .metric-card { box-shadow: 0 4px 18px rgba(29, 51, 117, 0.10); }
+  @media (max-width: 760px) { html.embedded .header-sub { margin-top: 0; } html.embedded .header-top { justify-content: flex-start; } }
+
 </style>
 <link href="/assets/glass.css" rel="stylesheet" />
 </head>
@@ -472,6 +484,13 @@
 </footer>
  
 <script>
+// The dashboard lives inside the CRM (one link, one login). Opened on its own,
+// send the visitor to the CRM: it shows the login screen if needed and then
+// opens the Dashboard tab.
+const EMBEDDED = window.self !== window.top;
+if (!EMBEDDED) { window.location.replace("/crm#dashboard"); }
+else { document.documentElement.classList.add("embedded"); }
+
 const TENANT_SLUG = "grip";
  
 const INTENT_LABELS_ES = {
