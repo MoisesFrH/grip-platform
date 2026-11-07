@@ -66,6 +66,24 @@ def _history_for_gemini(conversation: Conversation) -> list[dict[str, str]]:
     return history
 
 
+ESCALATED_NOTICE_MESSAGE = (
+    "Tu caso está en manos de nuestra secretaria. Te responderemos en cuanto sea posible."
+)
+
+
+def _should_send_escalated_notice(conversation: Conversation) -> bool:
+    """The notice goes out ONCE per escalation. Walking back from the newest
+    message: if we already sent it (or the "reopened" message), or a person
+    from the team has already written, stay silent; if we reach the bot's own
+    handoff message first, this is the first patient message since then."""
+    for m in reversed(conversation.messages or []):
+        if m.sender == MessageSender.HUMAN_AGENT:
+            return False
+        if m.sender == MessageSender.BOT:
+            return m.body not in (ESCALATED_NOTICE_MESSAGE, REOPENED_AFTER_RESOLVED_MESSAGE)
+    return True
+
+
 _HANDOFF_PROMISES = (
     "te conecto con", "te paso con", "te derivo", "te comunico con", "te pongo en contacto",
     "conecto con el equipo", "te contactará el equipo", "te contactara el equipo",
@@ -161,6 +179,9 @@ def process_inbound_message(
         if status_before == ConversationStatus.HUMAN_RESOLVED:
             crm.record_outbound_message(db, conversation, REOPENED_AFTER_RESOLVED_MESSAGE, sender=MessageSender.BOT)
             reply_text = REOPENED_AFTER_RESOLVED_MESSAGE
+        elif _should_send_escalated_notice(conversation):
+            crm.record_outbound_message(db, conversation, ESCALATED_NOTICE_MESSAGE, sender=MessageSender.BOT)
+            reply_text = ESCALATED_NOTICE_MESSAGE
         return OrchestratorResult(
             conversation_id=str(conversation.id),
             status=conversation.status,

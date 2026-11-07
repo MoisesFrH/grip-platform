@@ -559,18 +559,21 @@ function escapeHtml(text) {
  
 async function fetchSummary(days) {
   const res = await fetch(`/dashboard/api/summary?tenant_slug=${TENANT_SLUG}&days=${days}`);
+  if (res.status === 401) throw new Error("Tu sesión expiró o no has iniciado sesión. Entra desde /crm.");
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
  
 async function fetchReminders(days) {
   const res = await fetch(`/dashboard/api/reminders?tenant_slug=${TENANT_SLUG}&days=${days}&limit=50`);
+  if (res.status === 401) throw new Error("Tu sesión expiró o no has iniciado sesión. Entra desde /crm.");
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
  
 async function fetchPatients() {
   const res = await fetch(`/dashboard/api/patients?tenant_slug=${TENANT_SLUG}&limit=200`);
+  if (res.status === 401) throw new Error("Tu sesión expiró o no has iniciado sesión. Entra desde /crm.");
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }

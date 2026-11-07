@@ -155,6 +155,16 @@
     border-bottom: 2px solid transparent; margin-bottom: -1px;
   }
   .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .tab-badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--error); color: #fff; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+  .tab-btn.alert { color: var(--error); animation: tabPulse 1.2s ease-in-out infinite; }
+  .tab-btn.alert .tab-badge { animation: badgePop 1.2s ease-in-out infinite; }
+  @keyframes tabPulse { 0%,100% { background: transparent; } 50% { background: rgba(186,26,26,0.10); } }
+  @keyframes badgePop { 0%,100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+  .patient-row.case-waiting { border-left: 4px solid var(--error); background: rgba(255,218,214,0.55); }
+  .patient-row.case-waiting .p-phone { color: var(--error); font-weight: 600; }
+  .alert-banner { display: flex; align-items: center; gap: 10px; background: var(--error-container); color: var(--on-error-container); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; font-size: 0.86rem; font-weight: 600; }
+  .alert-banner .btn { margin-left: auto; }
+  @media (prefers-reduced-motion: reduce) { .tab-btn.alert, .tab-btn.alert .tab-badge { animation: none; } }
   .tab-btn:hover:not(.active) { color: var(--on-surface); }
  
   /* ---------- workspace ---------- */
@@ -373,11 +383,11 @@
  
   <!-- ===== TAB BAR (post-login) ===== -->
   <div class="tab-bar hidden" id="tab-bar">
-    <button type="button" class="tab-btn active" id="tab-btn-patients">
-      <span class="material-symbols-outlined">groups</span>Pacientes
+    <button type="button" class="tab-btn active" id="tab-btn-cases">
+      <span class="material-symbols-outlined">emergency</span>Casos escalados<span class="tab-badge hidden" id="cases-badge">0</span>
     </button>
-    <button type="button" class="tab-btn" id="tab-btn-cases">
-      <span class="material-symbols-outlined">emergency</span>Casos escalados
+    <button type="button" class="tab-btn" id="tab-btn-patients">
+      <span class="material-symbols-outlined">groups</span>Pacientes
     </button>
     <button type="button" class="tab-btn" id="tab-btn-agenda">
       <span class="material-symbols-outlined">calendar_month</span>Agenda
@@ -385,7 +395,16 @@
     <button type="button" class="tab-btn" id="tab-btn-payments">
       <span class="material-symbols-outlined">payments</span>Pagos
     </button>
+    <button type="button" class="tab-btn" id="tab-btn-dashboard">
+      <span class="material-symbols-outlined">monitoring</span>Dashboard
+    </button>
   </div>
+ 
+    <div class="alert-banner hidden" id="waiting-banner">
+      <span class="material-symbols-outlined">notifications_active</span>
+      <span id="waiting-banner-text"></span>
+      <button type="button" class="btn" id="waiting-banner-btn">Ver casos</button>
+    </div>
  
   <!-- ===== WORKSPACE (post-login) ===== -->
   <div class="workspace hidden" id="workspace-view">
@@ -606,6 +625,10 @@
   </div>
 
   <!-- ===== PAYMENTS (post-login) ===== -->
+  <div class="hidden" id="dashboard-view">
+    <iframe id="dashboard-frame" title="Dashboard" style="width:100%;height:calc(100vh - 150px);min-height:600px;border:0;border-radius:16px;background:#fff;"></iframe>
+  </div>
+
   <div class="hidden" id="payments-view">
     <div class="panel">
       <div class="panel-header-row">
@@ -742,6 +765,7 @@
   }
  
   function showLogin() {
+    stopCaseWatcher();
     $("login-view").classList.remove("hidden");
     $("tab-bar").classList.add("hidden");
     Object.values(TABS).forEach((id) => $(id).classList.add("hidden"));
@@ -751,7 +775,8 @@
   function enterWorkspace() {
     $("login-view").classList.add("hidden");
     $("tab-bar").classList.remove("hidden");
-    showTab("patients");
+    showTab("cases");
+    startCaseWatcher();
     $("staff-box").classList.remove("hidden");
     $("staff-name").textContent = state.staff.display_name;
     $("staff-role").textContent = state.staff.role === "DOCTOR" ? "Doctor/a" : "Secretaría";
@@ -761,7 +786,7 @@
  
   // ---------- tabs ----------
  
-  const TABS = { patients: "workspace-view", cases: "cases-view", agenda: "agenda-view", payments: "payments-view" };
+  const TABS = { cases: "cases-view", patients: "workspace-view", agenda: "agenda-view", payments: "payments-view", dashboard: "dashboard-view" };
 
   function showTab(name) {
     Object.keys(TABS).forEach((key) => {
@@ -769,8 +794,10 @@
       $(TABS[key]).classList.toggle("hidden", key !== name);
     });
     if (name === "cases") loadCases();
+    if ($("waiting-banner")) $("waiting-banner").classList.toggle("hidden", name === "cases" || $("cases-badge").classList.contains("hidden"));
     if (name === "agenda") loadAgenda();
     if (name === "payments") loadPayments();
+    if (name === "dashboard" && !$("dashboard-frame").getAttribute("src")) $("dashboard-frame").setAttribute("src", "/dashboard");
   }
   Object.keys(TABS).forEach((key) => $("tab-btn-" + key).addEventListener("click", () => showTab(key)));
 
@@ -1163,6 +1190,80 @@
     }
   });
  
+  // ---------- attention for the secretary: badge, title, sound, auto-refresh ----------
+
+  const CASE_POLL_MS = 20000;
+  let casePollTimer = null;
+  let lastWaiting = null;
+  let audioCtx = null;
+
+  function beep() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.22].forEach((delay, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.frequency.value = i === 0 ? 880 : 1175;
+        gain.gain.setValueAtTime(0.0001, audioCtx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + delay + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + delay + 0.18);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime + delay); osc.stop(audioCtx.currentTime + delay + 0.2);
+      });
+    } catch (e) { /* sound is a nice-to-have; browsers may block it */ }
+  }
+
+  function applyWaitingCount(count) {
+    const badge = $("cases-badge");
+    badge.textContent = String(count);
+    badge.classList.toggle("hidden", count === 0);
+    $("tab-btn-cases").classList.toggle("alert", count > 0);
+    document.title = (count > 0 ? "(" + count + ") " : "") + "ND Neurodiversa — CRM interno";
+    const banner = $("waiting-banner");
+    if (banner) {
+      banner.classList.toggle("hidden", count === 0 || $("tab-btn-cases").classList.contains("active"));
+      $("waiting-banner-text").textContent = count === 1
+        ? "1 paciente está esperando una respuesta de una persona"
+        : count + " pacientes están esperando una respuesta de una persona";
+    }
+  }
+
+  async function pollCases() {
+    try {
+      const cases = await api("/crm/cases");
+      const waiting = cases.filter((c) => c.status === "WAITING_FOR_HUMAN").length;
+      if (lastWaiting !== null && waiting > lastWaiting) {
+        beep();
+        showToast("Nuevo caso escalado: un paciente espera respuesta.", false);
+      }
+      lastWaiting = waiting;
+      applyWaitingCount(waiting);
+      // Keep the open list fresh without disturbing the "all conversations" audit view.
+      if (state.caseFilter !== "all" && !$("cases-view").classList.contains("hidden")) {
+        state.cases = cases;
+        renderCaseList();
+      }
+    } catch (e) {
+      if (e.status === 401) { showLogin(); }
+    }
+  }
+
+  function startCaseWatcher() {
+    stopCaseWatcher();
+    lastWaiting = null;
+    pollCases();
+    casePollTimer = setInterval(pollCases, CASE_POLL_MS);
+  }
+
+  function stopCaseWatcher() {
+    if (casePollTimer) clearInterval(casePollTimer);
+    casePollTimer = null;
+    lastWaiting = null;
+    document.title = "ND Neurodiversa — CRM interno";
+  }
+
+  $("waiting-banner-btn").addEventListener("click", () => { setCaseFilter("escalated"); showTab("cases"); });
+
   // ---------- cases ----------
  
   async function loadCases() {
@@ -1187,10 +1288,14 @@
         : "Ninguna conversación ha sido escalada a una persona todavía.") + "</div>";
       return;
     }
+    if (state.caseFilter !== "all") {
+      // People waiting for an answer always go first (stable sort keeps the API order otherwise).
+      shown.sort((a, b) => (b.status === "WAITING_FOR_HUMAN") - (a.status === "WAITING_FOR_HUMAN"));
+    }
     shown.forEach((c) => {
       const row = document.createElement("button");
       row.type = "button";
-      row.className = "patient-row" + (c.id === state.selectedCaseId ? " active" : "");
+      row.className = "patient-row" + (c.id === state.selectedCaseId ? " active" : "") + (c.status === "WAITING_FOR_HUMAN" ? " case-waiting" : "");
       const whenIso = state.caseFilter === "all" ? c.last_message_at : c.handoff_triggered_at;
       const when = whenIso ? formatInClinicTime(whenIso) : "—";
       row.innerHTML = `
