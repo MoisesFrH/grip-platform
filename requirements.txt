@@ -7,3 +7,4 @@ pydantic==2.9.2
 pydantic-settings==2.5.2
 python-dotenv==1.0.1
 google-genai==0.8.0
+segno>=1.6,<2
