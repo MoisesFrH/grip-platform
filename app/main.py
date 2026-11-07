@@ -10,6 +10,7 @@ from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.dev_chat import router as dev_chat_router
 from app.api.routes.simulator import router as simulator_router
 from app.api.routes.whatsapp import router as whatsapp_router
+from app.api.routes.consent_public import router as consent_public_router
 from app.core.config import get_settings
 from app.core.db import get_db
 
